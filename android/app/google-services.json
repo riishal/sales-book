@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "234141194565",
+    "project_id": "sales-book-6877c",
+    "storage_bucket": "sales-book-6877c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234141194565:android:5eb5a95bf03dda92cb062c",
+        "android_client_info": {
+          "package_name": "com.example.salesbook"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCat1JI-gjXI8LeHrpRp9MhIcyDlGwTMXw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
