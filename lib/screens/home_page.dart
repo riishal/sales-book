@@ -4,6 +4,7 @@ import 'customer_list_page.dart';
 import 'vendor_list_page.dart';
 import 'product_list_page.dart';
 import 'reports_page.dart';
+import 'investor_list_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -38,53 +39,71 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               StreamBuilder(
-                stream: FirebaseFirestore.instance
-                    .collection('customers')
-                    .snapshots(),
+                stream: FirebaseFirestore.instance.collection('customers').snapshots(),
                 builder: (context, customerSnapshot) {
                   return StreamBuilder(
-                    stream: FirebaseFirestore.instance
-                        .collection('vendors')
-                        .snapshots(),
+                    stream: FirebaseFirestore.instance.collection('vendors').snapshots(),
                     builder: (context, vendorSnapshot) {
-                      double totalReceived = 0;
-                      double totalPaid = 0;
-                      if (customerSnapshot.hasData) {
-                        for (var doc in customerSnapshot.data!.docs) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          totalReceived += (data['paidNow'] ?? 0.0).toDouble();
-                        }
-                      }
-                      if (vendorSnapshot.hasData) {
-                        for (var doc in vendorSnapshot.data!.docs) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          totalPaid += (data['paidNow'] ?? 0.0).toDouble();
-                        }
-                      }
-                      double netReceived = totalReceived - totalPaid;
-                      return Column(
-                        children: [
-                          _buildStatCard(
-                            'Total Received',
-                            '﷼${totalReceived.toStringAsFixed(2)}',
-                            Icons.arrow_downward,
-                            Colors.green,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildStatCard(
-                            'Net Received',
-                            '﷼${netReceived.toStringAsFixed(2)}',
-                            Icons.account_balance_wallet,
-                            Colors.orange,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildStatCard(
-                            'Total Paid',
-                            '﷼${totalPaid.toStringAsFixed(2)}',
-                            Icons.arrow_upward,
-                            Colors.red,
-                          ),
-                        ],
+                      return StreamBuilder(
+                        stream: FirebaseFirestore.instance.collection('investors').snapshots(),
+                        builder: (context, investorSnapshot) {
+                          double totalReceivable = 0;
+                          double totalPayable = 0;
+                          double totalInvested = 0;
+
+                          if (customerSnapshot.hasData) {
+                            for (var doc in customerSnapshot.data!.docs) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              totalReceivable += (data['currentBill'] ?? 0.0) - (data['paidNow'] ?? 0.0);
+                            }
+                          }
+                          if (vendorSnapshot.hasData) {
+                            for (var doc in vendorSnapshot.data!.docs) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              totalPayable += (data['currentBill'] ?? 0.0) - (data['paidNow'] ?? 0.0);
+                            }
+                          }
+                          if (investorSnapshot.hasData) {
+                            for (var doc in investorSnapshot.data!.docs) {
+                              final data = doc.data() as Map<String, dynamic>;
+                              totalInvested += data['amount'] ?? 0.0;
+                            }
+                          }
+
+                          double totalBalance = totalReceivable - totalPayable - totalInvested;
+
+                          return Column(
+                            children: [
+                              _buildStatCard(
+                                'Total Balance',
+                                '﷼${totalBalance.toStringAsFixed(2)}',
+                                Icons.account_balance,
+                                Colors.purple,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildStatCard(
+                                'Receivable from Customers',
+                                '﷼${totalReceivable.toStringAsFixed(2)}',
+                                Icons.arrow_downward,
+                                Colors.green,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildStatCard(
+                                'Payable to Vendors',
+                                '﷼${totalPayable.toStringAsFixed(2)}',
+                                Icons.arrow_upward,
+                                Colors.red,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildStatCard(
+                                'Payable to Investors',
+                                '﷼${totalInvested.toStringAsFixed(2)}',
+                                Icons.business_center,
+                                Colors.orange,
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   );
@@ -132,6 +151,15 @@ class HomePage extends StatelessWidget {
                     () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ProductListPage()),
+                    ),
+                  ),
+                  _buildFeatureCard(
+                    context,
+                    'Investors',
+                    Icons.business_center,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const InvestorListPage()),
                     ),
                   ),
                   _buildFeatureCard(

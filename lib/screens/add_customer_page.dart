@@ -6,8 +6,9 @@ import 'invoice_page.dart';
 class AddCustomerPage extends StatefulWidget {
   final String? docId;
   final Map<String, dynamic>? existingData;
+  final bool isEdit;
 
-  const AddCustomerPage({super.key, this.docId, this.existingData});
+  const AddCustomerPage({super.key, this.docId, this.existingData, this.isEdit = false});
 
   @override
   State<AddCustomerPage> createState() => _AddCustomerPageState();
@@ -22,8 +23,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   final _discountController = TextEditingController(text: '0');
   final _taxController = TextEditingController(text: '0');
   final _paidNowController = TextEditingController(text: '0');
-  List<Map<String, dynamic>> selectedProducts = [];
-  double currentBill = 0;
+  List<Map<String, dynamic>> _selectedProducts = [];
+  double _currentBill = 0;
   bool _isLoading = false;
 
   @override
@@ -32,32 +33,26 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     if (widget.existingData != null) {
       _nameController.text = widget.existingData!['name'] ?? '';
       _phoneController.text = widget.existingData!['phone'] ?? '';
-      _previousBalanceController.text =
-          (widget.existingData!['previousBalance'] ?? 0).toString();
-      _additionalChargeController.text =
-          (widget.existingData!['additionalCharge'] ?? 0).toString();
-      _discountController.text = (widget.existingData!['discount'] ?? 0)
-          .toString();
-      _taxController.text = (widget.existingData!['tax'] ?? 0).toString();
-      _paidNowController.text = (widget.existingData!['paidNow'] ?? 0)
-          .toString();
-      selectedProducts = List<Map<String, dynamic>>.from(
-        widget.existingData!['products'] ?? [],
-      );
+      if (widget.isEdit) {
+        _previousBalanceController.text = (widget.existingData!['previousBalance'] ?? 0).toString();
+      } else {
+        double previousBalance = (widget.existingData!['currentBill'] ?? 0.0) - (widget.existingData!['paidNow'] ?? 0.0);
+        _previousBalanceController.text = previousBalance.toStringAsFixed(2);
+      }
       _calculateTotal();
     }
   }
 
   void _calculateTotal() {
     double subtotal = 0;
-    for (var product in selectedProducts) {
-      subtotal += (product['rate'] as double) * (product['qty']);
+    for (var product in _selectedProducts) {
+      subtotal += (product['rate'] as double) * (product['qty'] as num);
     }
     double additional = double.tryParse(_additionalChargeController.text) ?? 0;
     double discount = double.tryParse(_discountController.text) ?? 0;
     double tax = double.tryParse(_taxController.text) ?? 0;
     double previous = double.tryParse(_previousBalanceController.text) ?? 0;
-    currentBill =
+    _currentBill =
         subtotal + additional - discount + (subtotal * tax / 100) + previous;
     setState(() {});
   }
@@ -67,12 +62,12 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       context,
       MaterialPageRoute(
         builder: (context) =>
-            ProductSelectionPage(selectedProducts: selectedProducts),
+            ProductSelectionPage(selectedProducts: _selectedProducts),
       ),
     );
-    if (result != null) {
+    if (result != null && result is List<Map<String, dynamic>>) {
       setState(() {
-        selectedProducts = result as List<Map<String, dynamic>>;
+        _selectedProducts = result;
         _calculateTotal();
       });
     }
@@ -81,37 +76,75 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    final data = {
+
+    final paidNow = double.parse(_paidNowController.text);
+    final updateData = {
       'name': _nameController.text,
       'phone': _phoneController.text,
       'previousBalance': double.parse(_previousBalanceController.text),
-      'currentBill': currentBill,
+      'currentBill': _currentBill,
       'additionalCharge': double.parse(_additionalChargeController.text),
       'discount': double.parse(_discountController.text),
       'tax': double.parse(_taxController.text),
-      'paidNow': double.parse(_paidNowController.text),
-      'products': selectedProducts,
+      'paidNow': widget.isEdit ? paidNow : FieldValue.increment(paidNow),
+      'products': _selectedProducts,
       'timestamp': FieldValue.serverTimestamp(),
     };
+
+    final invoiceData = Map<String, dynamic>.from(updateData);
+    if (!widget.isEdit) {
+      invoiceData['paidNow'] = (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
+    }
+
     try {
-      if (widget.docId != null) {
+      String? docId = widget.docId;
+      if (docId != null) {
         await FirebaseFirestore.instance
             .collection('customers')
-            .doc(widget.docId)
-            .update(data);
-        Navigator.pop(context);
+            .doc(docId)
+            .update(updateData);
       } else {
         final docRef = await FirebaseFirestore.instance
             .collection('customers')
-            .add(data);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                InvoicePage(docId: docRef.id, data: data, type: 'customer'),
-          ),
-        );
+            .add(updateData);
+        docId = docRef.id;
       }
+
+      if (!widget.isEdit) {
+        // Create a transaction record
+        await FirebaseFirestore.instance.collection('transactions').add({
+          'entityId': docId,
+          'entityName': _nameController.text,
+          'entityType': 'Customer',
+          'type': 'Sale',
+          'amount': _currentBill,
+          'paidNow': paidNow,
+          'products': _selectedProducts,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        // Update product quantities
+        for (var product in _selectedProducts) {
+          final productQuery = await FirebaseFirestore.instance
+              .collection('products')
+              .where('name', isEqualTo: product['name'])
+              .get();
+          if (productQuery.docs.isNotEmpty) {
+            final productDoc = productQuery.docs.first;
+            await productDoc.reference.update({
+              'qty': FieldValue.increment(-(product['qty'] as num).toDouble()),
+            });
+          }
+        }
+      }
+
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InvoicePage(docId: docId!, data: invoiceData, type: 'customer'),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -126,11 +159,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.docId != null ? 'Edit Customer' : 'Add Customer',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          widget.isEdit ? 'Edit Customer' : (widget.docId != null ? 'New Sale' : 'Add Customer'),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.indigo,
         elevation: 0,
@@ -155,6 +185,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                     decoration: _buildInputDecoration('Name', Icons.person),
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                     style: const TextStyle(color: Colors.white),
+                    enabled: widget.docId == null || widget.isEdit,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -163,17 +194,16 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                     keyboardType: TextInputType.phone,
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                     style: const TextStyle(color: Colors.white),
+                    enabled: widget.docId == null || widget.isEdit,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _previousBalanceController,
-                    decoration: _buildInputDecoration(
-                      'Previous Balance',
-                      Icons.account_balance_wallet,
-                    ),
+                    decoration: _buildInputDecoration('Previous Balance', Icons.account_balance_wallet),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => _calculateTotal(),
                     style: const TextStyle(color: Colors.white),
+                    enabled: false,
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -190,69 +220,11 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (selectedProducts.isNotEmpty)
-                    ...selectedProducts.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final product = entry.value;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        color: Colors.white.withOpacity(0.1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.2),
-                          ),
-                        ),
-                        child: ListTile(
-                          title: Text(
-                            product['name'],
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              SizedBox(
-                                width: 80,
-                                child: TextFormField(
-                                  initialValue: product['qty'].toString(),
-                                  decoration: _buildInputDecoration(
-                                    'Qty',
-                                    null,
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (v) {
-                                    selectedProducts[idx]['qty'] =
-                                        double.tryParse(v) ?? 1;
-                                    _calculateTotal();
-                                  },
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                'Rate: ﷼${product['rate']}',
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                            ],
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.white),
-                            onPressed: () {
-                              setState(() {
-                                selectedProducts.removeAt(idx);
-                              });
-                              _calculateTotal();
-                            },
-                          ),
-                        ),
-                      );
-                    }),
+                  _buildSelectedProductsList(),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _additionalChargeController,
-                    decoration: _buildInputDecoration(
-                      'Additional Charge',
-                      Icons.add_circle_outline,
-                    ),
+                    decoration: _buildInputDecoration('Additional Charge', Icons.add_circle_outline),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => _calculateTotal(),
                     style: const TextStyle(color: Colors.white),
@@ -260,10 +232,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _discountController,
-                    decoration: _buildInputDecoration(
-                      'Discount',
-                      Icons.remove_circle_outline,
-                    ),
+                    decoration: _buildInputDecoration('Discount', Icons.remove_circle_outline),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => _calculateTotal(),
                     style: const TextStyle(color: Colors.white),
@@ -284,7 +253,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Current Bill: ﷼${currentBill.toStringAsFixed(2)}',
+                      'Total Bill: ﷼${_currentBill.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -295,23 +264,14 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _paidNowController,
-                    decoration: _buildInputDecoration(
-                      'Paid Now',
-                      Icons.payment,
-                    ),
+                    decoration: _buildInputDecoration('Paid Now', Icons.payment),
                     keyboardType: TextInputType.number,
                     style: const TextStyle(color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: _saveCustomer,
-                    child: const Text(
-                      'Save',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: const Text('Save', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.indigo,
@@ -324,15 +284,46 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 ],
               ),
             ),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
+            if (_isLoading) const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSelectedProductsList() {
+    if (_selectedProducts.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _selectedProducts.length,
+      itemBuilder: (context, index) {
+        final product = _selectedProducts[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          color: Colors.white.withOpacity(0.1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+            side: BorderSide(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: ListTile(
+            title: Text(
+              product['name'],
+              style: const TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              'Qty: ${product['qty']}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            trailing: Text(
+              '﷼${(product['rate'] * (product['qty'] as num)).toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        );
+      },
     );
   }
 

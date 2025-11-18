@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_vendor_page.dart';
+import 'vendor_details_page.dart';
 
 class VendorListPage extends StatelessWidget {
   const VendorListPage({super.key});
@@ -100,21 +101,11 @@ class VendorListPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.white),
-                      onPressed: () async {
-                        await FirebaseFirestore.instance
-                            .collection('vendors')
-                            .doc(docId)
-                            .delete();
-                      },
-                    ),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              AddVendorPage(docId: docId, existingData: vendor),
+                          builder: (_) => VendorDetailsPage(docId: docId, vendorData: vendor),
                         ),
                       );
                     },

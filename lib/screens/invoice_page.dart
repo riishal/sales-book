@@ -18,6 +18,88 @@ class InvoicePage extends StatelessWidget {
     required this.type,
   });
 
+  String _generateInvoiceText() {
+    double subtotal = 0;
+    final productsList = (data['products'] as List).map((p) {
+      final total = p['rate'] * (p['qty'] as num);
+      subtotal += total;
+      return '${p['name']} x ${p['qty']} - ﷼${total.toStringAsFixed(2)}';
+    }).join('\n');
+
+    final balance = data['currentBill'] - data['paidNow'];
+
+    return '''
+      *INVOICE*
+      -----------------
+      Name: ${data['name']}
+      Phone: ${data['phone']}
+      Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
+      -----------------
+      *Products:*
+      $productsList
+      -----------------
+      Subtotal: riyal ${subtotal.toStringAsFixed(2)}
+      Additional Charge: riyal ${data['additionalCharge'].toStringAsFixed(2)}
+      Discount: -riyal ${data['discount'].toStringAsFixed(2)}
+      Tax: ${data['tax']}%
+      Previous Balance: riyal ${data['previousBalance'].toStringAsFixed(2)}
+      -----------------
+      *Total Bill: riyal ${data['currentBill'].toStringAsFixed(2)}*
+      Paid Now: riyal ${data['paidNow'].toStringAsFixed(2)}
+      *Balance: riyal ${balance.toStringAsFixed(2)}*
+    ''';
+  }
+
+  Future<void> _generatePDF(BuildContext context) async {
+    final pdf = pw.Document();
+    double subtotal = 0;
+    final productsList = (data['products'] as List).map((p) {
+      final total = p['rate'] * (p['qty'] as num);
+      subtotal += total;
+      return pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text('${p['name']} x ${p['qty']}'),
+          pw.Text('riyal ${total.toStringAsFixed(2)}'),
+        ],
+      );
+    }).toList();
+
+    final balance = data['currentBill'] - data['paidNow'];
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('INVOICE', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Text('Name: ${data['name']}'),
+            pw.Text('Phone: ${data['phone']}'),
+            pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}'),
+            pw.Divider(),
+            pw.Text('Products:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ...productsList,
+            pw.Divider(),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Subtotal'), pw.Text('riyal ${subtotal.toStringAsFixed(2)}')]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Additional Charge'), pw.Text('riyal ${data['additionalCharge'].toStringAsFixed(2)}')]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Discount'), pw.Text('-riyal ${data['discount'].toStringAsFixed(2)}')]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Tax'), pw.Text('${data['tax']}%')]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Previous Balance'), pw.Text('riyal ${data['previousBalance'].toStringAsFixed(2)}')]),
+            pw.Divider(),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Total Bill', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)), pw.Text('riyal ${data['currentBill'].toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))]),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Paid Now'), pw.Text('riyal ${data['paidNow'].toStringAsFixed(2)}')]),
+            pw.Divider(),
+            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Balance', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)), pw.Text('riyal ${balance.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))]),
+          ],
+        ),
+      ),
+    );
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final balance = data['currentBill'] - data['paidNow'];
@@ -33,7 +115,7 @@ class InvoicePage extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.share, color: Colors.white),
-            onPressed: () => _shareInvoice(context),
+            onPressed: () => Share.share(_generateInvoiceText()),
           ),
         ],
       ),
@@ -105,7 +187,7 @@ class InvoicePage extends StatelessWidget {
                                 style: const TextStyle(color: Colors.white),
                               ),
                               Text(
-                                '﷼${(p['rate'] * p['qty']).toStringAsFixed(2)}',
+                                '﷼${(p['rate'] * (p['qty'] as num)).toStringAsFixed(2)}',
                                 style: const TextStyle(color: Colors.white),
                               ),
                             ],
@@ -130,7 +212,14 @@ class InvoicePage extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _shareViaWhatsApp(context),
+                  onPressed: () async {
+                    final text = _generateInvoiceText();
+                    final phone = data['phone'].replaceAll(RegExp(r'[^\d+]'), '');
+                    final url = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(text)}');
+                    if (await canLaunchUrl(url)) {
+                      await launchUrl(url);
+                    }
+                  },
                   icon: const Icon(Icons.share),
                   label: const Text('Share via WhatsApp'),
                   style: ElevatedButton.styleFrom(
@@ -184,83 +273,5 @@ class InvoicePage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _generatePDF(BuildContext context) async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        build: (pw.Context context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'INVOICE',
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 20),
-            pw.Text('Name: ${data['name']}'),
-            pw.Text('Phone: ${data['phone']}'),
-            pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}'),
-            pw.SizedBox(height: 20),
-            pw.Text(
-              'Products:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            ),
-            ...((data['products'] as List).map(
-              (p) => pw.Text(
-                '${p['name']} x ${p['qty']} - ﷼${(p['rate'] * p['qty']).toStringAsFixed(2)}',
-              ),
-            )),
-            pw.SizedBox(height: 20),
-            pw.Text('Total Bill: ﷼${data['currentBill'].toStringAsFixed(2)}'),
-            pw.Text('Paid Now: ﷼${data['paidNow'].toStringAsFixed(2)}'),
-            pw.Text(
-              'Balance: ﷼${(data['currentBill'] - data['paidNow']).toStringAsFixed(2)}',
-            ),
-          ],
-        ),
-      ),
-    );
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
-  }
-
-  Future<void> _shareInvoice(BuildContext context) async {
-    final text =
-        '''
-Invoice
-Name: ${data['name']}
-Phone: ${data['phone']}
-Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
-Products:
-${(data['products'] as List).map((p) => '${p['name']} x ${p['qty']} - ﷼${(p['rate'] * p['qty']).toStringAsFixed(2)}').join('\n')}
-Total Bill: ﷼${data['currentBill'].toStringAsFixed(2)}
-Paid Now: ﷼${data['paidNow'].toStringAsFixed(2)}
-Balance: ﷼${(data['currentBill'] - data['paidNow']).toStringAsFixed(2)}
-''';
-    await Share.share(text);
-  }
-
-  Future<void> _shareViaWhatsApp(BuildContext context) async {
-    final text =
-        '''
-Invoice
-Name: ${data['name']}
-Phone: ${data['phone']}
-Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
-Products:
-${(data['products'] as List).map((p) => '${p['name']} x ${p['qty']} - ﷼${(p['rate'] * p['qty']).toStringAsFixed(2)}').join('\n')}
-Total Bill: ﷼${data['currentBill'].toStringAsFixed(2)}
-Paid Now: ﷼${data['paidNow'].toStringAsFixed(2)}
-Balance: ﷼${(data['currentBill'] - data['paidNow']).toStringAsFixed(2)}
-''';
-    final phone = data['phone'].replaceAll(RegExp(r'[^\d+]'), '');
-    final url = Uri.parse(
-      'https://wa.me/$phone?text=${Uri.encodeComponent(text)}',
-    );
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
   }
 }

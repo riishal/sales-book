@@ -15,6 +15,7 @@ class _AddProductPageState extends State<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _retailPriceController = TextEditingController();
   final _qtyController = TextEditingController(text: '0');
   final _unitController = TextEditingController(text: 'pcs');
   final _discountController = TextEditingController(text: '0');
@@ -27,6 +28,7 @@ class _AddProductPageState extends State<AddProductPage> {
     if (widget.existingData != null) {
       _nameController.text = widget.existingData!['name'] ?? '';
       _priceController.text = (widget.existingData!['price'] ?? 0).toString();
+      _retailPriceController.text = (widget.existingData!['retailPrice'] ?? 0).toString();
       _qtyController.text = (widget.existingData!['qty'] ?? 0).toString();
       _unitController.text = widget.existingData!['unit'] ?? 'pcs';
       _discountController.text = (widget.existingData!['discount'] ?? 0).toString();
@@ -41,6 +43,7 @@ class _AddProductPageState extends State<AddProductPage> {
     final data = {
       'name': _nameController.text,
       'price': double.parse(_priceController.text),
+      'retailPrice': double.parse(_retailPriceController.text),
       'qty': double.parse(_qtyController.text),
       'unit': _unitController.text,
       'discount': double.parse(_discountController.text),
@@ -103,7 +106,15 @@ class _AddProductPageState extends State<AddProductPage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _priceController,
-                    decoration: _buildInputDecoration('Price', Icons.attach_money),
+                    decoration: _buildInputDecoration('Purchase Price', Icons.attach_money),
+                    keyboardType: TextInputType.number,
+                    validator: (v) => v!.isEmpty ? 'Required' : null,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _retailPriceController,
+                    decoration: _buildInputDecoration('Retail Price', Icons.money),
                     keyboardType: TextInputType.number,
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                     style: const TextStyle(color: Colors.white),

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:salesbook/firebase_options.dart';
-import 'package:salesbook/screens/home_page.dart';
-
-// import 'firebase_options.dart';
+import 'screens/home_page.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  // Please generate your own firebase_options.dart file by running the FlutterFire CLI.
+  // See the official documentation for more information: https://firebase.flutter.dev/docs/cli
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SalesApp());
 }
