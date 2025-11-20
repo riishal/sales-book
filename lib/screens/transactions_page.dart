@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'invoice_page.dart';
 
 class TransactionsPage extends StatelessWidget {
   final String entityId;
@@ -56,7 +57,9 @@ class TransactionsPage extends StatelessWidget {
               itemCount: transactions.length,
               itemBuilder: (context, index) {
                 final transaction = transactions[index].data() as Map<String, dynamic>;
+                final docId = transactions[index].id;
                 final date = (transaction['timestamp'] as Timestamp).toDate();
+                final paymentMethod = transaction['paymentMethod'] != null ? ' - ${transaction['paymentMethod']}' : '';
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   color: Colors.white.withOpacity(0.1),
@@ -67,7 +70,7 @@ class TransactionsPage extends StatelessWidget {
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
                     title: Text(
-                      transaction['type'],
+                      '${transaction['type']}$paymentMethod',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -87,6 +90,20 @@ class TransactionsPage extends StatelessWidget {
                             : Colors.redAccent,
                       ),
                     ),
+                    onTap: () {
+                      if (transaction['type'] != 'Payment') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InvoicePage(
+                              docId: docId,
+                              data: transaction,
+                              type: transaction['entityType'].toLowerCase(),
+                            ),
+                          ),
+                        );
+                      }
+                    },
                   ),
                 );
               },

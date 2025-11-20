@@ -223,7 +223,7 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                                                   selectedProduct!['qty'] <
                                                       product['qty']) {
                                                 setState(() {
-                                                  selectedProduct?['qty']++;
+                                                  selectedProduct!['qty']++;
                                                 });
                                               }
                                             } else {

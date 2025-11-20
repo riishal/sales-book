@@ -111,7 +111,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       }
 
       if (!widget.isEdit) {
-        // Create a transaction record
+        // Create a transaction record with all calculation details
         await FirebaseFirestore.instance.collection('transactions').add({
           'entityId': docId,
           'entityName': _nameController.text,
@@ -120,6 +120,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
           'amount': _currentBill,
           'paidNow': paidNow,
           'products': _selectedProducts,
+          'additionalCharge': double.parse(_additionalChargeController.text),
+          'discount': double.parse(_discountController.text),
+          'tax': double.parse(_taxController.text),
+          'previousBalance': double.parse(_previousBalanceController.text),
           'timestamp': FieldValue.serverTimestamp(),
         });
 

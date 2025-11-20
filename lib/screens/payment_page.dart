@@ -4,8 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class PaymentPage extends StatefulWidget {
   final String entityId;
   final String entityType;
+  final double balance;
 
-  const PaymentPage({super.key, required this.entityId, required this.entityType});
+  const PaymentPage({
+    super.key,
+    required this.entityId,
+    required this.entityType,
+    required this.balance,
+  });
 
   @override
   State<PaymentPage> createState() => _PaymentPageState();
@@ -15,13 +21,16 @@ class _PaymentPageState extends State<PaymentPage> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   bool _isLoading = false;
+  String _paymentMethod = 'Cash';
 
   Future<void> _savePayment() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     final amount = double.parse(_amountController.text);
-    final transactionType = widget.entityType == 'Customer' ? 'Payment' : 'Purchase';
+    final transactionType = widget.entityType == 'Customer'
+        ? 'Payment'
+        : 'Purchase';
 
     try {
       final entityDoc = await FirebaseFirestore.instance
@@ -37,6 +46,7 @@ class _PaymentPageState extends State<PaymentPage> {
         'entityType': widget.entityType,
         'type': transactionType,
         'amount': amount,
+        'paymentMethod': _paymentMethod,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -44,9 +54,7 @@ class _PaymentPageState extends State<PaymentPage> {
       final entityRef = FirebaseFirestore.instance
           .collection(widget.entityType.toLowerCase() + 's')
           .doc(widget.entityId);
-      await entityRef.update({
-        'paidNow': FieldValue.increment(amount),
-      });
+      await entityRef.update({'paidNow': FieldValue.increment(amount)});
 
       Navigator.pop(context);
     } catch (e) {
@@ -62,7 +70,13 @@ class _PaymentPageState extends State<PaymentPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Pay/Get Cash', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.entityType == 'Vendor' ? 'Pay Cash' : 'Get Cash',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.indigo,
         elevation: 0,
       ),
@@ -81,14 +95,35 @@ class _PaymentPageState extends State<PaymentPage> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Outstanding Balance: riyal ${widget.balance.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _amountController,
-                    decoration: _buildInputDecoration('Amount', Icons.attach_money),
+                    decoration: _buildInputDecoration(
+                      'Amount',
+                      Icons.attach_money,
+                    ),
                     keyboardType: TextInputType.number,
                     validator: (v) => v!.isEmpty ? 'Required' : null,
                     style: const TextStyle(color: Colors.white),
                   ),
+                  const SizedBox(height: 24),
+                  _buildPaymentMethodSelector(),
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: _savePayment,
@@ -102,15 +137,58 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                     child: const Text(
                       'Save Payment',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            if (_isLoading) const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
+            if (_isLoading)
+              const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          RadioListTile<String>(
+            activeColor: Colors.white,
+            title: const Text('Cash', style: TextStyle(color: Colors.white)),
+            value: 'Cash',
+            groupValue: _paymentMethod,
+            onChanged: (value) {
+              setState(() {
+                _paymentMethod = value!;
+              });
+            },
+          ),
+          RadioListTile<String>(
+            activeColor: Colors.white,
+            title: const Text('Bank', style: TextStyle(color: Colors.white)),
+            value: 'Bank',
+            groupValue: _paymentMethod,
+            onChanged: (value) {
+              setState(() {
+                _paymentMethod = value!;
+              });
+            },
+          ),
+        ],
       ),
     );
   }

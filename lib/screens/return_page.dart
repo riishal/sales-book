@@ -45,10 +45,12 @@ class _ReturnPageState extends State<ReturnPage> {
         }
       }
     }
-    setState(() {
-      _purchasedProducts = productMap.values.toList();
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _purchasedProducts = productMap.values.toList();
+        _isLoading = false;
+      });
+    }
   }
 
   void _calculateTotal() {

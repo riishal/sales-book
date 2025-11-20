@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'invoice_page.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
@@ -30,6 +31,7 @@ class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStat
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'All'),
             Tab(text: 'Sales'),
@@ -64,7 +66,11 @@ class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStat
   Widget _buildTransactionList(String? type) {
     Query query = FirebaseFirestore.instance.collection('transactions').orderBy('timestamp', descending: true);
     if (type != null) {
-      query = query.where('type', isEqualTo: type);
+      if (type == 'Payments') {
+        query = query.where('type', whereIn: ['Payment', 'Purchase']);
+      } else {
+        query = query.where('type', isEqualTo: type);
+      }
     }
 
     return StreamBuilder(
@@ -95,7 +101,9 @@ class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStat
           itemCount: transactions.length,
           itemBuilder: (context, index) {
             final transaction = transactions[index].data() as Map<String, dynamic>;
+            final docId = transactions[index].id;
             final date = (transaction['timestamp'] as Timestamp).toDate();
+            final paymentMethod = transaction['paymentMethod'] != null ? ' - ${transaction['paymentMethod']}' : '';
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               color: Colors.white.withOpacity(0.1),
@@ -110,7 +118,7 @@ class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStat
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
-                  '${transaction['type']} - ${DateFormat('dd MMM yyyy, hh:mm a').format(date)}',
+                  '${transaction['type']}$paymentMethod - ${DateFormat('dd MMM yyyy, hh:mm a').format(date)}',
                   style: const TextStyle(color: Colors.white70),
                 ),
                 trailing: Text(
@@ -121,6 +129,20 @@ class _ReportsPageState extends State<ReportsPage> with SingleTickerProviderStat
                     color: Colors.white,
                   ),
                 ),
+                onTap: () {
+                  if (transaction['type'] != 'Payment') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => InvoicePage(
+                          docId: docId,
+                          data: transaction,
+                          type: transaction['entityType'].toLowerCase(),
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             );
           },
