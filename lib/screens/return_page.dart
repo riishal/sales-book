@@ -30,12 +30,12 @@ class _ReturnPageState extends State<ReturnPage> {
         .where('type', isEqualTo: 'Sale')
         .get();
 
-    final Map<String, Map<String, dynamic>> productMap = {};
+    final Map<String, dynamic> productMap = {};
     for (var doc in transactionsSnapshot.docs) {
       final transaction = doc.data();
       for (var product in transaction['products']) {
         if (productMap.containsKey(product['name'])) {
-          productMap[product['name']]!['qty'] += product['qty'];
+          productMap[product['name']]['qty'] += product['qty'];
         } else {
           productMap[product['name']] = {
             'name': product['name'],
@@ -47,7 +47,7 @@ class _ReturnPageState extends State<ReturnPage> {
     }
     if (mounted) {
       setState(() {
-        _purchasedProducts = productMap.values.toList();
+        _purchasedProducts = List<Map<String, dynamic>>.from(productMap.values);
         _isLoading = false;
       });
     }
@@ -74,6 +74,7 @@ class _ReturnPageState extends State<ReturnPage> {
     setState(() => _isLoading = true);
 
     try {
+      final batch = FirebaseFirestore.instance.batch();
       final customerDoc = await FirebaseFirestore.instance
           .collection('customers')
           .doc(widget.entityId)
@@ -81,7 +82,10 @@ class _ReturnPageState extends State<ReturnPage> {
       final customerName = customerDoc.data()?['name'] ?? '';
 
       // Create a transaction record for the return
-      await FirebaseFirestore.instance.collection('transactions').add({
+      final transactionRef = FirebaseFirestore.instance
+          .collection('transactions')
+          .doc();
+      batch.set(transactionRef, {
         'entityId': widget.entityId,
         'entityName': customerName,
         'entityType': 'Customer',
@@ -95,7 +99,7 @@ class _ReturnPageState extends State<ReturnPage> {
       final customerRef = FirebaseFirestore.instance
           .collection('customers')
           .doc(widget.entityId);
-      await customerRef.update({
+      batch.update(customerRef, {
         'currentBill': FieldValue.increment(-_totalReturnValue),
       });
 
@@ -104,110 +108,80 @@ class _ReturnPageState extends State<ReturnPage> {
         final productQuery = await FirebaseFirestore.instance
             .collection('products')
             .where('name', isEqualTo: product['name'])
+            .limit(1)
             .get();
         if (productQuery.docs.isNotEmpty) {
-          final productDoc = productQuery.docs.first;
-          await productDoc.reference.update({
-            'qty': FieldValue.increment((product['qty'] as num).toDouble()),
+          final productDocRef = productQuery.docs.first.reference;
+          batch.update(productDocRef, {
+            'qty': FieldValue.increment((product['qty'] as num).toInt()),
           });
         }
       }
 
+      await batch.commit();
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Customer Return',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.indigo,
-        elevation: 0,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.indigo, Colors.blue],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Stack(
-          children: [
-            ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildPurchasedProductsList(),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Total Return Value: ﷼${_totalReturnValue.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+      appBar: AppBar(title: const Text('Customer Return')),
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildPurchasedProductsList(),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _saveReturn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.indigo,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                child: Text(
+                  'Total Return Value: ﷼${_totalReturnValue.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).primaryColor,
                   ),
-                  child: const Text(
-                    'Save Return',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
-          ],
-        ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _saveReturn,
+                child: const Text(
+                  'Save Return',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
+        ],
       ),
     );
   }
 
   Widget _buildPurchasedProductsList() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     if (_purchasedProducts.isEmpty) {
       return const Center(
-        child: Text(
-          'No purchased products found for this customer.',
-          style: TextStyle(color: Colors.white),
-        ),
+        child: Text('No purchased products found for this customer.'),
       );
     }
     return ListView.builder(
@@ -222,25 +196,14 @@ class _ReturnPageState extends State<ReturnPage> {
         );
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
-          color: Colors.white.withOpacity(0.1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-            side: BorderSide(color: Colors.white.withOpacity(0.2)),
-          ),
           child: ListTile(
-            title: Text(
-              product['name'],
-              style: const TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              'Purchased Qty: ${product['qty']}',
-              style: const TextStyle(color: Colors.white70),
-            ),
+            title: Text(product['name']),
+            subtitle: Text('Purchased Qty: ${product['qty']}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.remove, color: Colors.white),
+                  icon: const Icon(Icons.remove),
                   onPressed: () {
                     setState(() {
                       if (selectedProduct['qty'] > 0) {
@@ -258,13 +221,10 @@ class _ReturnPageState extends State<ReturnPage> {
                 ),
                 Text(
                   selectedProduct['qty'].toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.add, color: Colors.white),
+                  icon: const Icon(Icons.add),
                   onPressed: () {
                     setState(() {
                       if (selectedProduct['qty'] < product['qty']) {

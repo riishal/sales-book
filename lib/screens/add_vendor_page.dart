@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'product_selection_page.dart';
 import 'invoice_page.dart';
 import 'add_product_page.dart';
+import '../widgets/selected_product_card.dart';
 
 class AddVendorPage extends StatefulWidget {
   final String? docId;
@@ -78,8 +79,10 @@ class _AddVendorPageState extends State<AddVendorPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    final paidNow = double.parse(_paidNowController.text);
-    final updateData = {
+    final paidNow = double.tryParse(_paidNowController.text) ?? 0.0;
+
+    // Common data for both add and update
+    Map<String, dynamic> vendorData = {
       'name': _nameController.text,
       'phone': _phoneController.text,
       'previousBalance': double.parse(_previousBalanceController.text),
@@ -87,34 +90,39 @@ class _AddVendorPageState extends State<AddVendorPage> {
       'additionalCharge': double.parse(_additionalChargeController.text),
       'discount': double.parse(_discountController.text),
       'tax': double.parse(_taxController.text),
-      'paidNow': widget.isEdit ? paidNow : FieldValue.increment(paidNow),
       'products': _selectedProducts,
       'timestamp': FieldValue.serverTimestamp(),
     };
 
-    final invoiceData = Map<String, dynamic>.from(updateData);
-    if (!widget.isEdit) {
+    // Data for invoice needs a concrete paidNow value.
+    final invoiceData = Map<String, dynamic>.from(vendorData);
+    if (widget.docId != null && !widget.isEdit) {
+      // Existing vendor, new purchase -> add current payment to existing total for invoice
       invoiceData['paidNow'] = (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
+    } else {
+      // New vendor or editing vendor -> paidNow is just the current value
+      invoiceData['paidNow'] = paidNow;
     }
 
     try {
-      String? docId = widget.docId;
-      if (docId != null) {
-        await FirebaseFirestore.instance
-            .collection('vendors')
-            .doc(docId)
-            .update(updateData);
-      } else {
-        final docRef = await FirebaseFirestore.instance
-            .collection('vendors')
-            .add(updateData);
-        docId = docRef.id;
+      final batch = FirebaseFirestore.instance.batch();
+      DocumentReference vendorRef;
+
+      if (widget.docId != null) { // Existing vendor
+        vendorRef = FirebaseFirestore.instance.collection('vendors').doc(widget.docId);
+        vendorData['paidNow'] = widget.isEdit ? paidNow : FieldValue.increment(paidNow);
+        batch.update(vendorRef, vendorData);
+      } else { // New vendor
+        vendorRef = FirebaseFirestore.instance.collection('vendors').doc();
+        vendorData['paidNow'] = paidNow;
+        batch.set(vendorRef, vendorData);
       }
 
       if (!widget.isEdit) {
-        // Create a transaction record with all calculation details
-        await FirebaseFirestore.instance.collection('transactions').add({
-          'entityId': docId,
+        // Create a transaction record
+        final transactionRef = FirebaseFirestore.instance.collection('transactions').doc();
+        batch.set(transactionRef, {
+          'entityId': vendorRef.id,
           'entityName': _nameController.text,
           'entityType': 'Vendor',
           'type': 'Purchase',
@@ -128,26 +136,32 @@ class _AddVendorPageState extends State<AddVendorPage> {
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        // Update product quantities
+        // Use a loop to get product references and add updates to the batch
         for (var product in _selectedProducts) {
           final productQuery = await FirebaseFirestore.instance
               .collection('products')
               .where('name', isEqualTo: product['name'])
+              .limit(1)
               .get();
+
           if (productQuery.docs.isNotEmpty) {
-            final productDoc = productQuery.docs.first;
-            await productDoc.reference.update({
-              'qty': FieldValue.increment((product['qty'] as num).toDouble()),
+            final productDocRef = productQuery.docs.first.reference;
+            batch.update(productDocRef, {
+              'qty': FieldValue.increment((product['qty'] as num).toInt()),
+              'price': product['rate'],
             });
           }
         }
       }
 
+      await batch.commit();
+
       Navigator.pop(context);
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => InvoicePage(docId: docId!, data: invoiceData, type: 'vendor'),
+          builder: (_) =>
+              InvoicePage(docId: vendorRef.id, data: invoiceData, type: 'vendor'),
         ),
       );
     } catch (e) {
@@ -165,160 +179,117 @@ class _AddVendorPageState extends State<AddVendorPage> {
       appBar: AppBar(
         title: Text(
           widget.isEdit ? 'Edit Vendor' : (widget.docId != null ? 'New Purchase' : 'Add Vendor'),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.indigo,
-        elevation: 0,
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.indigo, Colors.blue],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: _buildInputDecoration('Name', Icons.store),
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
-                    style: const TextStyle(color: Colors.white),
-                    enabled: widget.docId == null || widget.isEdit,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration: _buildInputDecoration('Phone', Icons.phone),
-                    keyboardType: TextInputType.phone,
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
-                    style: const TextStyle(color: Colors.white),
-                    enabled: widget.docId == null || widget.isEdit,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _previousBalanceController,
-                    decoration: _buildInputDecoration('Previous Balance', Icons.account_balance_wallet),
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => _calculateTotal(),
-                    style: const TextStyle(color: Colors.white),
-                    enabled: false,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _selectProducts,
-                          icon: const Icon(Icons.add_shopping_cart),
-                          label: const Text('Select Products'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AddProductPage()),
-                            );
-                          },
-                          icon: const Icon(Icons.add),
-                          label: const Text('New Product'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildSelectedProductsList(),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _additionalChargeController,
-                    decoration: _buildInputDecoration('Additional Charge', Icons.add_circle_outline),
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => _calculateTotal(),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _discountController,
-                    decoration: _buildInputDecoration('Discount', Icons.remove_circle_outline),
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => _calculateTotal(),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _taxController,
-                    decoration: _buildInputDecoration('Tax (%)', Icons.receipt),
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => _calculateTotal(),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      'Total Bill: ﷼${_currentBill.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(Icons.store)),
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                  enabled: widget.docId == null || widget.isEdit,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)),
+                  keyboardType: TextInputType.phone,
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                  enabled: widget.docId == null || widget.isEdit,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _previousBalanceController,
+                  decoration: const InputDecoration(labelText: 'Previous Balance', prefixIcon: Icon(Icons.account_balance_wallet)),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _calculateTotal(),
+                  enabled: false,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _selectProducts,
+                        icon: const Icon(Icons.add_shopping_cart),
+                        label: Text('Select Products (${_selectedProducts.length})'),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _paidNowController,
-                    decoration: _buildInputDecoration('Paid Now', Icons.payment),
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _saveVendor,
-                    child: const Text('Save', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.indigo,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AddProductPage()),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('New Product'),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSelectedProductsList(),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _additionalChargeController,
+                  decoration: const InputDecoration(labelText: 'Additional Charge', prefixIcon: Icon(Icons.add_circle_outline)),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _calculateTotal(),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _discountController,
+                  decoration: const InputDecoration(labelText: 'Discount', prefixIcon: Icon(Icons.remove_circle_outline)),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _calculateTotal(),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _taxController,
+                  decoration: const InputDecoration(labelText: 'Tax (%)', prefixIcon: Icon(Icons.receipt)),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => _calculateTotal(),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
-              ),
+                  child: Text(
+                    'Total Bill: ﷼${_currentBill.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _paidNowController,
+                  decoration: const InputDecoration(labelText: 'Paid Now', prefixIcon: Icon(Icons.payment)),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _saveVendor,
+                  child: const Text('Save', style: TextStyle(fontSize: 18)),
+                ),
+              ],
             ),
-            if (_isLoading) const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
-          ],
-        ),
+          ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
+        ],
       ),
     );
   }
@@ -333,47 +304,26 @@ class _AddVendorPageState extends State<AddVendorPage> {
       itemCount: _selectedProducts.length,
       itemBuilder: (context, index) {
         final product = _selectedProducts[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          color: Colors.white.withOpacity(0.1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-            side: BorderSide(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: ListTile(
-            title: Text(
-              product['name'],
-              style: const TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              'Qty: ${product['qty']}',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            trailing: Text(
-              '﷼${(product['rate'] * (product['qty'] as num)).toStringAsFixed(2)}',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
+        return SelectedProductCard(
+          product: product,
+          isPurchase: true, // It's a purchase
+          onUpdate: (updatedProduct) {
+            setState(() {
+              _selectedProducts[index] = {
+                ...product,
+                ...updatedProduct,
+              };
+              _calculateTotal();
+            });
+          },
+          onRemove: () {
+            setState(() {
+              _selectedProducts.removeAt(index);
+              _calculateTotal();
+            });
+          },
         );
       },
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData? icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      prefixIcon: icon != null ? Icon(icon, color: Colors.white70) : null,
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.1),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.white),
-      ),
     );
   }
 }

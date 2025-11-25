@@ -1,10 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
+
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class InvoicePage extends StatelessWidget {
   final String docId;
@@ -54,7 +55,7 @@ class InvoicePage extends StatelessWidget {
     ''';
   }
 
-  Future<void> _generatePDF(BuildContext context) async {
+  Future<Uint8List> _generatePDFBytes() async {
     final pdf = pw.Document();
     double subtotal = 0;
     final productsList = (data['products'] as List? ?? []).map((p) {
@@ -170,9 +171,7 @@ class InvoicePage extends StatelessWidget {
         ),
       ),
     );
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
+    return pdf.save();
   }
 
   @override
@@ -184,25 +183,39 @@ class InvoicePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text(
           'Invoice',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.indigo,
+        backgroundColor: Theme.of(context).primaryColor,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-            onPressed: () => _generatePDF(context),
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.black87),
+            onPressed: () async {
+              final pdfBytes = await _generatePDFBytes();
+              await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+            },
           ),
-          // IconButton(
-          //   icon: const Icon(Icons.share, color: Colors.white),
-          //   onPressed: () => Share.share(_generateInvoiceText()),
-          // ),
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.black87),
+            onPressed: () async {
+              final pdfBytes = await _generatePDFBytes();
+              final xFile = XFile.fromData(
+                pdfBytes,
+                name: 'invoice_${docId}.pdf',
+                mimeType: 'application/pdf',
+              );
+              await Share.shareXFiles([xFile], text: _generateInvoiceText());
+            },
+          ),
         ],
       ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.indigo, Colors.blue],
+            colors: [
+              Theme.of(context).primaryColor,
+              Theme.of(context).primaryColorLight,
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -213,10 +226,10 @@ class InvoicePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Card(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.black87.withOpacity(0.1),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
-                  side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                  side: BorderSide(color: Colors.black87.withOpacity(0.2)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -228,15 +241,15 @@ class InvoicePage extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
-                      const Divider(height: 32, color: Colors.white),
+                      const Divider(height: 32, color: Colors.black87),
                       Text(
                         'Name: ${data['name'] ?? data['entityName']}',
                         style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -244,7 +257,7 @@ class InvoicePage extends StatelessWidget {
                         'Phone: ${data['phone'] ?? 'N/A'}',
                         style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -252,16 +265,16 @@ class InvoicePage extends StatelessWidget {
                         'Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
                         style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
-                      const Divider(height: 32, color: Colors.white),
+                      const Divider(height: 32, color: Colors.black87),
                       const Text(
                         'Products:',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -273,17 +286,17 @@ class InvoicePage extends StatelessWidget {
                             children: [
                               Text(
                                 '${p['name']} x ${p['qty']}',
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black87),
                               ),
                               Text(
                                 '﷼${((p['rate'] ?? 0.0) * (p['qty'] as num? ?? 0)).toStringAsFixed(2)}',
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black87),
                               ),
                             ],
                           ),
                         ),
                       )),
-                      const Divider(height: 32, color: Colors.white),
+                      const Divider(height: 32, color: Colors.black87),
                       _buildRow(
                         'Previous Balance',
                         data['previousBalance'] ?? 0.0,
@@ -294,14 +307,14 @@ class InvoicePage extends StatelessWidget {
                       ),
                       _buildRow('Discount', data['discount'] ?? 0.0),
                       _buildRow('Tax', data['tax'] ?? 0.0),
-                      const Divider(height: 24, color: Colors.white),
+                      const Divider(height: 24, color: Colors.black87),
                       _buildRow(
                         'Total Bill',
                         data['currentBill'] ?? data['amount'] ?? 0.0,
                         isTotal: true,
                       ),
                       _buildRow('Paid Now', data['paidNow'] ?? 0.0),
-                      const Divider(height: 24, color: Colors.white),
+                      const Divider(height: 24, color: Colors.black87),
                       _buildRow('Balance', balance, isBalance: true),
                     ],
                   ),
@@ -312,24 +325,21 @@ class InvoicePage extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    Share.share(_generateInvoiceText());
-                    // final text = _generateInvoiceText();
-                    // final phone = (data['phone'] ?? '').replaceAll(
-                    //   RegExp(r'[^\d+]'),
-                    //   '',
-                    // );
-                    // final url = Uri.parse(
-                    //   'https://wa.me/$phone?text=${Uri.encodeComponent(text)}',
-                    // );
-                    // if (await canLaunchUrl(url)) {
-                    //   await launchUrl(url);
-                    // }
+                    final pdfBytes = await _generatePDFBytes();
+                    final xFile = XFile.fromData(
+                      pdfBytes,
+                      name: 'invoice_${docId}.pdf',
+                      mimeType: 'application/pdf',
+                    );
+                    await Share.shareXFiles([
+                      xFile,
+                    ], text: _generateInvoiceText());
                   },
                   icon: const Icon(Icons.share),
-                  label: const Text('Share via WhatsApp'),
+                  label: const Text('Share Invoice PDF'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.indigo,
+                    backgroundColor: Colors.black87,
+                    foregroundColor: Theme.of(context).primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -346,7 +356,7 @@ class InvoicePage extends StatelessWidget {
 
   Widget _buildRow(
     String label,
-    dynamic value, {
+    num value, {
     bool isTotal = false,
     bool isBalance = false,
   }) {
@@ -362,7 +372,7 @@ class InvoicePage extends StatelessWidget {
               fontWeight: isTotal || isBalance
                   ? FontWeight.bold
                   : FontWeight.normal,
-              color: Colors.white,
+              color: Colors.black87,
             ),
           ),
           Text(
@@ -372,7 +382,7 @@ class InvoicePage extends StatelessWidget {
               fontWeight: isTotal || isBalance
                   ? FontWeight.bold
                   : FontWeight.normal,
-              color: Colors.white,
+              color: Colors.black87,
             ),
           ),
         ],

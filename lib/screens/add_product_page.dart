@@ -44,11 +44,11 @@ class _AddProductPageState extends State<AddProductPage> {
       'name': _nameController.text,
       'price': double.parse(_priceController.text),
       'retailPrice': double.parse(_retailPriceController.text),
-      'qty': double.parse(_qtyController.text),
+      'qty': int.parse(_qtyController.text),
       'unit': _unitController.text,
       'discount': double.parse(_discountController.text),
       'tax': double.parse(_taxController.text),
-      'total': double.parse(_priceController.text) * double.parse(_qtyController.text),
+      'total': double.parse(_priceController.text) * int.parse(_qtyController.text),
       'timestamp': FieldValue.serverTimestamp(),
     };
     try {
@@ -76,125 +76,96 @@ class _AddProductPageState extends State<AddProductPage> {
       appBar: AppBar(
         title: Text(
           widget.docId != null ? 'Edit Product' : 'Add Product',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.indigo,
-        elevation: 0,
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.indigo, Colors.blue],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Stack(
-          children: [
-            Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  const SizedBox(height: 24),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: _buildInputDecoration('Product Name', Icons.inventory_2),
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
-                    style: const TextStyle(color: Colors.white),
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Product Name',
+                    prefixIcon: Icon(Icons.inventory_2),
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _priceController,
-                    decoration: _buildInputDecoration('Purchase Price', Icons.attach_money),
-                    keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
-                    style: const TextStyle(color: Colors.white),
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Purchase Price',
+                    prefixIcon: Icon(Icons.attach_money),
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _retailPriceController,
-                    decoration: _buildInputDecoration('Retail Price', Icons.money),
-                    keyboardType: TextInputType.number,
-                    validator: (v) => v!.isEmpty ? 'Required' : null,
-                    style: const TextStyle(color: Colors.white),
+                  keyboardType: TextInputType.number,
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _retailPriceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Retail Price',
+                    prefixIcon: Icon(Icons.money),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          controller: _qtyController,
-                          decoration: _buildInputDecoration('Quantity', null),
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
+                  keyboardType: TextInputType.number,
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextFormField(
+                        controller: _qtyController,
+                        decoration: const InputDecoration(
+                          labelText: 'Quantity',
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _unitController,
-                          decoration: _buildInputDecoration('Unit', null),
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _discountController,
-                    decoration: _buildInputDecoration('Discount (%)', Icons.discount),
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _taxController,
-                    decoration: _buildInputDecoration('Tax (%)', Icons.receipt),
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _saveProduct,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.indigo,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        keyboardType: TextInputType.number,
                       ),
                     ),
-                    child: const Text(
-                      'Save Product',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _unitController,
+                        decoration: const InputDecoration(labelText: 'Unit'),
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _discountController,
+                  decoration: const InputDecoration(
+                    labelText: 'Discount (%)',
+                    prefixIcon: Icon(Icons.discount),
                   ),
-                ],
-              ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _taxController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tax (%)',
+                    prefixIcon: Icon(Icons.receipt),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _saveProduct,
+                  child: const Text(
+                    'Save Product',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
             ),
-            if (_isLoading) const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData? icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      prefixIcon: icon != null ? Icon(icon, color: Colors.white70) : null,
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.1),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.white),
+          ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
+        ],
       ),
     );
   }

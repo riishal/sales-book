@@ -20,20 +20,32 @@ class SalesApp extends StatelessWidget {
       title: 'Sales Management',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
-        scaffoldBackgroundColor: Colors.grey[200],
+        primaryColor: Colors.teal,
+        primarySwatch: Colors.teal,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          primary: Colors.teal,
+          secondary: Colors.teal,
+        ),
+        scaffoldBackgroundColor: Colors.grey[100],
         cardTheme: CardThemeData(
-          elevation: 2,
+          elevation: 1,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(16),
           ),
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white,
+          shadowColor: Colors.black.withOpacity(0.05),
         ),
         appBarTheme: const AppBarTheme(
           elevation: 0,
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.teal,
           foregroundColor: Colors.white,
-          titleTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+          titleTextStyle: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: Colors.white,
+          ),
+          iconTheme: IconThemeData(color: Colors.white),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -41,34 +53,38 @@ class SalesApp extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.symmetric(vertical: 16),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.indigo,
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
             textStyle: const TextStyle(fontWeight: FontWeight.bold),
           ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Colors.teal,
+          foregroundColor: Colors.white,
         ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: Colors.grey[300]!),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.white, width: 2),
+            borderSide: const BorderSide(color: Colors.teal, width: 2),
           ),
           filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          labelStyle: const TextStyle(color: Colors.white70),
-          hintStyle: const TextStyle(color: Colors.white70),
+          fillColor: Colors.white,
+          labelStyle: const TextStyle(color: Colors.black54),
+          hintStyle: const TextStyle(color: Colors.black54),
         ),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white70),
-          titleLarge: TextStyle(
-            color: Colors.white,
+        textTheme: TextTheme(
+          bodyLarge: TextStyle(color: Colors.grey[800]),
+          bodyMedium: TextStyle(color: Colors.grey[600]),
+          titleLarge: const TextStyle(
+            color: Colors.black87,
             fontWeight: FontWeight.bold,
           ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.teal),
       ),
       home: const HomePage(),
     );
