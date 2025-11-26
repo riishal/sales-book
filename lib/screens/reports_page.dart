@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:salesbook/provider/language_provider.dart';
 import 'invoice_page.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -23,64 +25,123 @@ class _ReportsPageState extends State<ReportsPage>
     _tabController = TabController(length: 5, vsync: this);
   }
 
+  // Function to get Malayalam translation for transaction types
+  String _getTransactionTypeText(String type, bool isMalayalam) {
+    if (!isMalayalam) return type;
+
+    switch (type.toLowerCase()) {
+      case 'cash received from vendor':
+        return 'വെണ്ടറിൽ നിന്ന് പണം ലഭിച്ചു';
+      case 'cash paid to vendor':
+        return 'വെണ്ടർക്ക് പണം നൽകി';
+      case 'purchase':
+        return 'സാധനങ്ങൾ വാങ്ങി';
+      case 'cash paid to customer':
+        return 'കസ്റ്റമർക്ക് പണം നൽകി';
+      case 'cash received from customer':
+        return 'കസ്റ്റമറിൽ നിന്ന് പണം ലഭിച്ചു';
+      case 'sale':
+        return 'സാധനങ്ങൾ വിറ്റു';
+      case 'return':
+        return 'സാധനങ്ങൾ തിരിച്ചെടുത്തു';
+      case 'payment':
+        return 'പേയ്മെന്റ്';
+      default:
+        return type;
+    }
+  }
+
+  // Function to get Malayalam translation for filter labels
+  String _getFilterLabel(String label, bool isMalayalam) {
+    if (!isMalayalam) return label;
+
+    switch (label.toLowerCase()) {
+      case 'reports':
+        return 'റിപ്പോർട്ടുകൾ';
+      case 'all':
+        return 'എല്ലാം';
+      case 'sales':
+        return 'വിൽപ്പന';
+      case 'purchases':
+        return 'വാങ്ങലുകൾ';
+      case 'returns':
+        return 'മടക്കങ്ങൾ';
+      case 'payments':
+        return 'പേയ്മെന്റുകൾ';
+      case 'today':
+        return 'ഇന്ന്';
+      case 'this week':
+        return 'ഈ ആഴ്ച';
+      case 'this month':
+        return 'ഈ മാസം';
+      case 'custom':
+        return 'കസ്റ്റം';
+      case 'start date':
+        return 'ആരംഭ തീയതി';
+      case 'end date':
+        return 'അവസാന തീയതി';
+      case 'no transactions found':
+        return 'ഇടപാടുകളൊന്നുമില്ല';
+      default:
+        return label;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Reports',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Theme.of(context).primaryColor,
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.black87,
-          indicatorColor: Colors.black87,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Sales'),
-            Tab(text: 'Purchases'),
-            Tab(text: 'Returns'),
-            Tab(text: 'Payments'),
-          ],
-        ),
-      ),
-      body: Container(
-        // decoration: BoxDecoration(
-        //   gradient: LinearGradient(
-        //     colors: [
-        //       Theme.of(context).primaryColor,
-        //       Theme.of(context).primaryColorLight,
-        //     ],
-        //     begin: Alignment.topLeft,
-        //     end: Alignment.bottomRight,
-        //   ),
-        // ),
-        child: Column(
-          children: [
-            _buildFilterChips(),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildTransactionList(null),
-                  _buildTransactionList('Sale'),
-                  _buildTransactionList('Purchase'),
-                  _buildTransactionList('Return'),
-                  _buildTransactionList('Payment'),
-                ],
+    return Consumer<LanguageProvider>(
+      builder: (context, lang, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              _getFilterLabel('Reports', lang.isMalayalam),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        ),
-      ),
+            backgroundColor: Theme.of(context).primaryColor,
+            elevation: 0,
+            bottom: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: Colors.white,
+              isScrollable: true,
+              tabs: [
+                Tab(text: _getFilterLabel('All', lang.isMalayalam)),
+                Tab(text: _getFilterLabel('Sales', lang.isMalayalam)),
+                Tab(text: _getFilterLabel('Purchases', lang.isMalayalam)),
+                Tab(text: _getFilterLabel('Returns', lang.isMalayalam)),
+                Tab(text: _getFilterLabel('Payments', lang.isMalayalam)),
+              ],
+            ),
+          ),
+          body: Container(
+            child: Column(
+              children: [
+                _buildFilterChips(lang),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTransactionList(null, lang),
+                      _buildTransactionList('Sale', lang),
+                      _buildTransactionList('Purchase', lang),
+                      _buildTransactionList('Return', lang),
+                      _buildTransactionList('Payment', lang),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildFilterChips() {
+  Widget _buildFilterChips(LanguageProvider lang) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -89,11 +150,10 @@ class _ReportsPageState extends State<ReportsPage>
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildFilterChip('All', 'all'),
-              _buildFilterChip('Today', 'today'),
-              _buildFilterChip('This Week', 'week'),
-              _buildFilterChip('This Month', 'month'),
-              _buildFilterChip('Custom', 'custom'),
+              _buildFilterChip('Today', 'today', lang),
+              _buildFilterChip('This Week', 'week', lang),
+              _buildFilterChip('This Month', 'month', lang),
+              _buildFilterChip('Custom', 'custom', lang),
             ],
           ),
           if (_filterType == 'custom') ...[
@@ -111,18 +171,15 @@ class _ReportsPageState extends State<ReportsPage>
                       );
                       if (date != null) setState(() => _startDate = date);
                     },
-                    icon: Icon(
-                      Icons.calendar_today,
-                      color: Theme.of(context).primaryColor,
-                    ),
+                    icon: const Icon(Icons.calendar_today),
                     label: Text(
                       _startDate != null
                           ? DateFormat('dd/MM/yy').format(_startDate!)
-                          : 'Start Date',
-                      style: TextStyle(color: Theme.of(context).primaryColor),
+                          : _getFilterLabel('Start Date', lang.isMalayalam),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black87,
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.teal,
                     ),
                   ),
                 ),
@@ -138,18 +195,15 @@ class _ReportsPageState extends State<ReportsPage>
                       );
                       if (date != null) setState(() => _endDate = date);
                     },
-                    icon: Icon(
-                      Icons.calendar_today,
-                      color: Theme.of(context).primaryColor,
-                    ),
+                    icon: const Icon(Icons.calendar_today),
                     label: Text(
                       _endDate != null
                           ? DateFormat('dd/MM/yy').format(_endDate!)
-                          : 'End Date',
-                      style: TextStyle(color: Theme.of(context).primaryColor),
+                          : _getFilterLabel('End Date', lang.isMalayalam),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black87,
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.teal,
                     ),
                   ),
                 ),
@@ -161,9 +215,9 @@ class _ReportsPageState extends State<ReportsPage>
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
+  Widget _buildFilterChip(String label, String value, LanguageProvider lang) {
     return FilterChip(
-      label: Text(label),
+      label: Text(_getFilterLabel(label, lang.isMalayalam)),
       selected: _filterType == value,
       onSelected: (selected) {
         setState(() {
@@ -174,18 +228,16 @@ class _ReportsPageState extends State<ReportsPage>
           }
         });
       },
-      backgroundColor: Colors.black87.withOpacity(0.2),
-      selectedColor: Colors.black87,
-      checkmarkColor: Theme.of(context).primaryColor,
+      backgroundColor: Colors.grey[200],
+      selectedColor: Colors.teal,
+      checkmarkColor: Colors.white,
       labelStyle: TextStyle(
-        color: _filterType == value
-            ? Theme.of(context).primaryColor
-            : Colors.black87,
+        color: _filterType == value ? Colors.white : Colors.black87,
       ),
     );
   }
 
-  Widget _buildTransactionList(String? type) {
+  Widget _buildTransactionList(String? type, LanguageProvider lang) {
     Query query = FirebaseFirestore.instance
         .collection('transactions')
         .orderBy('timestamp', descending: true);
@@ -276,10 +328,10 @@ class _ReportsPageState extends State<ReportsPage>
           );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
-              'No transactions found',
-              style: TextStyle(color: Colors.black87),
+              _getFilterLabel('No transactions found', lang.isMalayalam),
+              style: const TextStyle(color: Colors.black87),
             ),
           );
         }
@@ -295,12 +347,19 @@ class _ReportsPageState extends State<ReportsPage>
             final paymentMethod = transaction['paymentMethod'] != null
                 ? ' - ${transaction['paymentMethod']}'
                 : '';
+
+            // Get translated transaction type
+            final transactionType = _getTransactionTypeText(
+              transaction['type'],
+              lang.isMalayalam,
+            );
+
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
-              color: Colors.black87.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
-                side: BorderSide(color: Colors.black87.withOpacity(0.2)),
+                side: BorderSide(color: Colors.teal.withOpacity(0.2)),
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16),
@@ -312,7 +371,7 @@ class _ReportsPageState extends State<ReportsPage>
                   ),
                 ),
                 subtitle: Text(
-                  '${transaction['type']}$paymentMethod - ${DateFormat('dd MMM yyyy, hh:mm a').format(date)}',
+                  '$transactionType$paymentMethod - ${DateFormat('dd MMM yyyy, hh:mm a').format(date)}',
                   style: const TextStyle(color: Colors.black87),
                 ),
                 trailing: Text(

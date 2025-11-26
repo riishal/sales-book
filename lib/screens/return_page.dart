@@ -120,6 +120,7 @@ class _ReturnPageState extends State<ReturnPage> {
 
       await batch.commit();
       Navigator.pop(context);
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

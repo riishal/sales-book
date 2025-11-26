@@ -1,15 +1,18 @@
+// lib/screens/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:salesbook/provider/language_provider.dart';
+import '../l10n/app_localizations.dart';
+
 import 'customer_list_page.dart';
 import 'vendor_list_page.dart';
 import 'product_list_page.dart';
 import 'reports_page.dart';
-import 'investor_list_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -19,168 +22,160 @@ class _HomePageState extends State<HomePage> {
   DateTime? _startDate;
   DateTime? _endDate;
 
-  Query _getFilteredTransactionsQuery(String collectionName) {
-    Query query = FirebaseFirestore.instance.collection(collectionName);
+  Query _getFilteredQuery() {
+    Query query = FirebaseFirestore.instance.collection('transactions');
     final now = DateTime.now();
 
     switch (_filterType) {
       case 'today':
         final start = DateTime(now.year, now.month, now.day);
-        final end = start.add(const Duration(days: 1));
-        return query.where(
-          'timestamp',
-          isGreaterThanOrEqualTo: start,
-          isLessThan: end,
-        );
+        return query.where('timestamp', isGreaterThanOrEqualTo: start);
       case 'week':
         final start = now.subtract(Duration(days: now.weekday - 1));
-        final end = start.add(const Duration(days: 7));
-        return query.where(
-          'timestamp',
-          isGreaterThanOrEqualTo: start,
-          isLessThan: end,
-        );
+        return query.where('timestamp', isGreaterThanOrEqualTo: start);
       case 'month':
         final start = DateTime(now.year, now.month, 1);
-        final end = DateTime(now.year, now.month + 1, 1);
-        return query.where(
-          'timestamp',
-          isGreaterThanOrEqualTo: start,
-          isLessThan: end,
-        );
+        return query.where('timestamp', isGreaterThanOrEqualTo: start);
       case 'custom':
         if (_startDate != null && _endDate != null) {
-          final start = DateTime(
-            _startDate!.year,
-            _startDate!.month,
-            _startDate!.day,
-          );
-          final end = DateTime(
-            _endDate!.year,
-            _endDate!.month,
-            _endDate!.day,
-            23,
-            59,
-            59,
-          );
+          final end = _endDate!.add(const Duration(days: 1));
           return query.where(
             'timestamp',
-            isGreaterThanOrEqualTo: start,
-            isLessThanOrEqualTo: end,
+            isGreaterThanOrEqualTo: _startDate,
+            isLessThan: end,
           );
         }
-        return query.where(
-          'timestamp',
-          isNull: true,
-        ); // No data for invalid range
-      default: // 'all'
+        return query.where('timestamp', isNull: true);
+      default:
         return query;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Sales Dashboard'), centerTitle: true),
+      appBar: AppBar(
+        title: Text(loc.appTitle),
+        actions: [
+          Consumer<LanguageProvider>(
+            builder: (context, lang, _) {
+              return CircleAvatar(
+                backgroundColor: Colors.white,
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.language, color: Colors.teal),
+                  onSelected: (String value) {
+                    lang.toggleLanguage();
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    PopupMenuItem<String>(
+                      value: 'language',
+                      child: Text(lang.isMalayalam ? 'English' : 'മലയാളം'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildFilterChips(),
-            const SizedBox(height: 24),
+            // _buildFilterChips(loc),
+            // const SizedBox(height: 24),
             StreamBuilder(
               stream: FirebaseFirestore.instance
                   .collection('customers')
                   .snapshots(),
-              builder: (context, customerSnapshot) {
+              builder: (context, cSnap) {
                 return StreamBuilder(
                   stream: FirebaseFirestore.instance
                       .collection('vendors')
                       .snapshots(),
-                  builder: (context, vendorSnapshot) {
+                  builder: (context, vSnap) {
                     return StreamBuilder(
-                      stream: FirebaseFirestore.instance
-                          .collection('investors')
-                          .snapshots(),
-                      builder: (context, investorSnapshot) {
-                        return StreamBuilder(
-                          stream: _getFilteredTransactionsQuery(
-                            'transactions',
-                          ).snapshots(),
-                          builder: (context, transactionSnapshot) {
-                            double totalReceivable = 0;
-                            double totalPayable = 0;
-                            double totalInvested = 0;
-                            double netChange = 0;
+                      stream: _getFilteredQuery().snapshots(),
+                      builder: (context, tSnap) {
+                        double receivable = 0, payable = 0, netChange = 0;
 
-                            if (customerSnapshot.hasData) {
-                              for (var doc in customerSnapshot.data!.docs) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                totalReceivable +=
-                                    (data['currentBill'] ?? 0.0) -
-                                    (data['paidNow'] ?? 0.0);
-                              }
-                            }
-                            if (vendorSnapshot.hasData) {
-                              for (var doc in vendorSnapshot.data!.docs) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                totalPayable +=
-                                    (data['currentBill'] ?? 0.0) -
-                                    (data['paidNow'] ?? 0.0);
-                              }
-                            }
-                            if (investorSnapshot.hasData) {
-                              for (var doc in investorSnapshot.data!.docs) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                totalInvested += data['amount'] ?? 0.0;
-                              }
-                            }
-                            if (transactionSnapshot.hasData) {
-                              for (var doc in transactionSnapshot.data!.docs) {
-                                final data = doc.data() as Map<String, dynamic>;
-                                if (data['entityType'] == 'Customer') {
-                                  netChange += (data['paidNow'] ?? 0.0);
-                                } else if (data['entityType'] == 'Vendor') {
-                                  netChange -= (data['paidNow'] ?? 0.0);
-                                }
-                              }
-                            }
+                        // Calculate Receivable (what customers owe you)
+                        if (cSnap.hasData) {
+                          for (var doc in cSnap.data!.docs) {
+                            final d = doc.data();
+                            double currentBill = (d['currentBill'] ?? 0)
+                                .toDouble();
+                            double paidNow = (d['paidNow'] ?? 0).toDouble();
+                            receivable += (currentBill - paidNow);
+                          }
+                        }
 
-                            return GridView.count(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              children: [
-                                _buildStatCard(
-                                  'Net Change',
-                                  '﷼${netChange.toStringAsFixed(2)}',
-                                  Icons.account_balance,
-                                  Colors.teal,
-                                ),
-                                _buildStatCard(
-                                  'Receivable',
-                                  '﷼${totalReceivable.toStringAsFixed(2)}',
-                                  Icons.arrow_downward,
-                                  Colors.green,
-                                ),
-                                _buildStatCard(
-                                  'Payable',
-                                  '﷼${totalPayable.toStringAsFixed(2)}',
-                                  Icons.arrow_upward,
-                                  Colors.red,
-                                ),
-                                _buildStatCard(
-                                  'Invested',
-                                  '﷼${totalInvested.toStringAsFixed(2)}',
-                                  Icons.business_center,
-                                  Colors.orange,
-                                ),
-                              ],
-                            );
-                          },
+                        // Calculate Payable (what you owe vendors)
+                        if (vSnap.hasData) {
+                          for (var doc in vSnap.data!.docs) {
+                            final d = doc.data();
+                            double currentBill = (d['currentBill'] ?? 0)
+                                .toDouble();
+                            double paidNow = (d['paidNow'] ?? 0).toDouble();
+                            payable += (currentBill - paidNow);
+                          }
+                        }
+
+                        // Calculate Net Change from filtered transactions
+                        if (tSnap.hasData) {
+                          for (var doc in tSnap.data!.docs) {
+                            final d = doc.data() as Map<String, dynamic>?;
+                            if (d != null) {
+                              double paidAmount = (d['paidNow'] ?? 0)
+                                  .toDouble();
+
+                              if (d['entityType'] == 'Customer') {
+                                // Money received from customers (positive)
+                                netChange += paidAmount;
+                              } else if (d['entityType'] == 'Vendor') {
+                                // Money paid to vendors (negative)
+                                netChange -= paidAmount;
+                              }
+                            }
+                          }
+                        }
+
+                        return Column(
+                          children: [
+                            // Net Change Card
+                            // _buildBigCard(
+                            //   loc.netChange,
+                            //   '﷼${netChange.toStringAsFixed(2)}',
+                            //   Icons.account_balance_wallet,
+                            //   netChange >= 0 ? Colors.teal : Colors.red,
+                            // ),
+                            // const SizedBox(height: 16),
+                            // Row(
+                            //   children: [
+                            //     Expanded(
+                            //       child: _buildCard(
+                            //         loc.receivable,
+                            //         '﷼${receivable.toStringAsFixed(2)}',
+                            //         Icons.arrow_downward,
+                            //         Colors.green,
+                            //       ),
+                            //     ),
+                            //     const SizedBox(width: 10),
+                            //     Expanded(
+                            //       child: _buildCard(
+                            //         loc.payable,
+                            //         '﷼${payable.toStringAsFixed(2)}',
+                            //         Icons.arrow_upward,
+                            //         Colors.red,
+                            //       ),
+                            //     ),
+                            //   ],
+                            // ),
+                          ],
                         );
                       },
                     );
@@ -188,8 +183,8 @@ class _HomePageState extends State<HomePage> {
                 );
               },
             ),
-            const SizedBox(height: 32),
-            Text('Features', style: Theme.of(context).textTheme.titleLarge),
+            // const SizedBox(height: 32),
+            // Text(loc.features, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             GridView.count(
               shrinkWrap: true,
@@ -197,47 +192,35 @@ class _HomePageState extends State<HomePage> {
               crossAxisCount: 2,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
+              childAspectRatio: 1.2,
               children: [
-                _buildFeatureCard(
-                  context,
-                  'Customers',
+                _featureCard(
+                  loc.customers,
                   Icons.people,
                   () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const CustomerListPage()),
                   ),
                 ),
-                _buildFeatureCard(
-                  context,
-                  'Vendors',
+                _featureCard(
+                  loc.vendors,
                   Icons.store,
                   () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const VendorListPage()),
                   ),
                 ),
-                _buildFeatureCard(
-                  context,
-                  'Products',
+                _featureCard(
+                  loc.products,
                   Icons.inventory_2,
                   () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const ProductListPage()),
                   ),
                 ),
-                _buildFeatureCard(
-                  context,
-                  'Investors',
-                  Icons.business_center,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const InvestorListPage()),
-                  ),
-                ),
-                _buildFeatureCard(
-                  context,
-                  'Reports',
-                  Icons.analytics,
+                _featureCard(
+                  loc.reports,
+                  Icons.bar_chart,
                   () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const ReportsPage()),
@@ -251,61 +234,54 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildFilterChips() {
+  Widget _buildFilterChips(AppLocalizations loc) {
     return Column(
       children: [
         Wrap(
           spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildFilterChip('All', 'all'),
-            _buildFilterChip('Today', 'today'),
-            _buildFilterChip('This Week', 'week'),
-            _buildFilterChip('This Month', 'month'),
-            _buildFilterChip('Custom', 'custom'),
-          ],
+          children: ['all', 'today', 'week', 'month', 'custom'].map((v) {
+            String label = {
+              'all': loc.all,
+              'today': loc.today,
+              'week': loc.thisWeek,
+              'month': loc.thisMonth,
+              'custom': loc.custom,
+            }[v]!;
+            return FilterChip(
+              checkmarkColor: Colors.white,
+              backgroundColor: Colors.grey[200],
+              selectedColor: Colors.teal,
+              labelStyle: TextStyle(
+                color: _filterType == v ? Colors.white : Colors.black87,
+              ),
+              label: Text(label),
+              selected: _filterType == v,
+              onSelected: (_) {
+                setState(() {
+                  _filterType = v;
+                  if (v != 'custom') _startDate = _endDate = null;
+                });
+              },
+            );
+          }).toList(),
         ),
         if (_filterType == 'custom') ...[
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _startDate ?? DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) setState(() => _startDate = date);
-                  },
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text(
-                    _startDate != null
-                        ? DateFormat('dd/MM/yy').format(_startDate!)
-                        : 'Start Date',
-                  ),
+                child: _dateButton(
+                  loc.startDate,
+                  _startDate,
+                  (d) => setState(() => _startDate = d),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _endDate ?? DateTime.now(),
-                      firstDate: _startDate ?? DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) setState(() => _endDate = date);
-                  },
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text(
-                    _endDate != null
-                        ? DateFormat('dd/MM/yy').format(_endDate!)
-                        : 'End Date',
-                  ),
+                child: _dateButton(
+                  loc.endDate,
+                  _endDate,
+                  (d) => setState(() => _endDate = d),
                 ),
               ),
             ],
@@ -315,49 +291,49 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
-    final isSelected = _filterType == value;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        setState(() {
-          _filterType = value;
-          if (value != 'custom') {
-            _startDate = null;
-            _endDate = null;
-          }
-        });
+  Widget _dateButton(String hint, DateTime? date, Function(DateTime) onPicked) {
+    return ElevatedButton.icon(
+      icon: const Icon(Icons.calendar_today),
+      label: Text(
+        date != null ? DateFormat('dd/MM/yy').format(date) : hint,
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+      onPressed: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: date ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) onPicked(picked);
       },
-      backgroundColor: isSelected
-          ? Theme.of(context).primaryColor
-          : Colors.white,
-      selectedColor: Theme.of(context).primaryColor,
-      checkmarkColor: Colors.white,
-      labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87),
     );
   }
 
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildBigCard(String title, String value, IconData icon, Color color) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+        padding: const EdgeInsets.all(20),
+        child: Row(
           children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(value, style: Theme.of(context).textTheme.titleLarge),
+            Icon(icon, size: 40, color: color),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 16, color: Colors.black),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -365,12 +341,37 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildFeatureCard(
-    BuildContext context,
-    String title,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
+  Widget _buildCard(String title, String value, IconData icon, Color color) {
+    var provider = Provider.of<LanguageProvider>(context, listen: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(icon, size: 36, color: color),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: provider.isMalayalam ? 13 : 16,
+                color: Colors.black,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _featureCard(String title, IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -378,12 +379,16 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 40),
+            Icon(icon, size: 42, color: Colors.teal),
             const SizedBox(height: 12),
             Text(
               title,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+                fontWeight: FontWeight.w500,
+              ),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ],
         ),

@@ -10,7 +10,12 @@ class AddVendorPage extends StatefulWidget {
   final Map<String, dynamic>? existingData;
   final bool isEdit;
 
-  const AddVendorPage({super.key, this.docId, this.existingData, this.isEdit = false});
+  const AddVendorPage({
+    super.key,
+    this.docId,
+    this.existingData,
+    this.isEdit = false,
+  });
 
   @override
   State<AddVendorPage> createState() => _AddVendorPageState();
@@ -36,9 +41,12 @@ class _AddVendorPageState extends State<AddVendorPage> {
       _nameController.text = widget.existingData!['name'] ?? '';
       _phoneController.text = widget.existingData!['phone'] ?? '';
       if (widget.isEdit) {
-        _previousBalanceController.text = (widget.existingData!['previousBalance'] ?? 0).toString();
+        _previousBalanceController.text =
+            (widget.existingData!['previousBalance'] ?? 0).toString();
       } else {
-        double previousBalance = (widget.existingData!['currentBill'] ?? 0.0) - (widget.existingData!['paidNow'] ?? 0.0);
+        double previousBalance =
+            (widget.existingData!['currentBill'] ?? 0.0) -
+            (widget.existingData!['paidNow'] ?? 0.0);
         _previousBalanceController.text = previousBalance.toStringAsFixed(2);
       }
       _calculateTotal();
@@ -63,8 +71,10 @@ class _AddVendorPageState extends State<AddVendorPage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            ProductSelectionPage(selectedProducts: _selectedProducts, isPurchase: true),
+        builder: (context) => ProductSelectionPage(
+          selectedProducts: _selectedProducts,
+          isPurchase: true,
+        ),
       ),
     );
     if (result != null && result is List<Map<String, dynamic>>) {
@@ -98,7 +108,8 @@ class _AddVendorPageState extends State<AddVendorPage> {
     final invoiceData = Map<String, dynamic>.from(vendorData);
     if (widget.docId != null && !widget.isEdit) {
       // Existing vendor, new purchase -> add current payment to existing total for invoice
-      invoiceData['paidNow'] = (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
+      invoiceData['paidNow'] =
+          (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
     } else {
       // New vendor or editing vendor -> paidNow is just the current value
       invoiceData['paidNow'] = paidNow;
@@ -108,11 +119,17 @@ class _AddVendorPageState extends State<AddVendorPage> {
       final batch = FirebaseFirestore.instance.batch();
       DocumentReference vendorRef;
 
-      if (widget.docId != null) { // Existing vendor
-        vendorRef = FirebaseFirestore.instance.collection('vendors').doc(widget.docId);
-        vendorData['paidNow'] = widget.isEdit ? paidNow : FieldValue.increment(paidNow);
+      if (widget.docId != null) {
+        // Existing vendor
+        vendorRef = FirebaseFirestore.instance
+            .collection('vendors')
+            .doc(widget.docId);
+        vendorData['paidNow'] = widget.isEdit
+            ? paidNow
+            : FieldValue.increment(paidNow);
         batch.update(vendorRef, vendorData);
-      } else { // New vendor
+      } else {
+        // New vendor
         vendorRef = FirebaseFirestore.instance.collection('vendors').doc();
         vendorData['paidNow'] = paidNow;
         batch.set(vendorRef, vendorData);
@@ -120,7 +137,9 @@ class _AddVendorPageState extends State<AddVendorPage> {
 
       if (!widget.isEdit) {
         // Create a transaction record
-        final transactionRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final transactionRef = FirebaseFirestore.instance
+            .collection('transactions')
+            .doc();
         batch.set(transactionRef, {
           'entityId': vendorRef.id,
           'entityName': _nameController.text,
@@ -160,8 +179,11 @@ class _AddVendorPageState extends State<AddVendorPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              InvoicePage(docId: vendorRef.id, data: invoiceData, type: 'vendor'),
+          builder: (_) => InvoicePage(
+            docId: vendorRef.id,
+            data: invoiceData,
+            type: 'vendor',
+          ),
         ),
       );
     } catch (e) {
@@ -178,7 +200,9 @@ class _AddVendorPageState extends State<AddVendorPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.isEdit ? 'Edit Vendor' : (widget.docId != null ? 'New Purchase' : 'Add Vendor'),
+          widget.isEdit
+              ? 'Edit Vendor'
+              : (widget.docId != null ? 'New Purchase' : 'Add Vendor'),
         ),
       ),
       body: Stack(
@@ -190,14 +214,20 @@ class _AddVendorPageState extends State<AddVendorPage> {
               children: [
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(Icons.store)),
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.store),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   enabled: widget.docId == null || widget.isEdit,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)),
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.phone),
+                  ),
                   keyboardType: TextInputType.phone,
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   enabled: widget.docId == null || widget.isEdit,
@@ -205,7 +235,10 @@ class _AddVendorPageState extends State<AddVendorPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _previousBalanceController,
-                  decoration: const InputDecoration(labelText: 'Previous Balance', prefixIcon: Icon(Icons.account_balance_wallet)),
+                  decoration: const InputDecoration(
+                    labelText: 'Previous Balance',
+                    prefixIcon: Icon(Icons.account_balance_wallet),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                   enabled: false,
@@ -217,7 +250,9 @@ class _AddVendorPageState extends State<AddVendorPage> {
                       child: ElevatedButton.icon(
                         onPressed: _selectProducts,
                         icon: const Icon(Icons.add_shopping_cart),
-                        label: Text('Select Products (${_selectedProducts.length})'),
+                        label: Text(
+                          'Select Products (${_selectedProducts.length})',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -226,7 +261,9 @@ class _AddVendorPageState extends State<AddVendorPage> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const AddProductPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const AddProductPage(),
+                            ),
                           );
                         },
                         icon: const Icon(Icons.add),
@@ -240,21 +277,30 @@ class _AddVendorPageState extends State<AddVendorPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _additionalChargeController,
-                  decoration: const InputDecoration(labelText: 'Additional Charge', prefixIcon: Icon(Icons.add_circle_outline)),
+                  decoration: const InputDecoration(
+                    labelText: 'Additional Charge',
+                    prefixIcon: Icon(Icons.add_circle_outline),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _discountController,
-                  decoration: const InputDecoration(labelText: 'Discount', prefixIcon: Icon(Icons.remove_circle_outline)),
+                  decoration: const InputDecoration(
+                    labelText: 'Discount',
+                    prefixIcon: Icon(Icons.remove_circle_outline),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _taxController,
-                  decoration: const InputDecoration(labelText: 'Tax (%)', prefixIcon: Icon(Icons.receipt)),
+                  decoration: const InputDecoration(
+                    labelText: 'Tax (%)',
+                    prefixIcon: Icon(Icons.receipt),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
@@ -277,7 +323,10 @@ class _AddVendorPageState extends State<AddVendorPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _paidNowController,
-                  decoration: const InputDecoration(labelText: 'Paid Now', prefixIcon: Icon(Icons.payment)),
+                  decoration: const InputDecoration(
+                    labelText: 'Paid Now',
+                    prefixIcon: Icon(Icons.payment),
+                  ),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 24),
@@ -285,6 +334,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
                   onPressed: _saveVendor,
                   child: const Text('Save', style: TextStyle(fontSize: 18)),
                 ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -309,10 +359,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
           isPurchase: true, // It's a purchase
           onUpdate: (updatedProduct) {
             setState(() {
-              _selectedProducts[index] = {
-                ...product,
-                ...updatedProduct,
-              };
+              _selectedProducts[index] = {...product, ...updatedProduct};
               _calculateTotal();
             });
           },

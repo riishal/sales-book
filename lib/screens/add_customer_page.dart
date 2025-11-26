@@ -9,7 +9,12 @@ class AddCustomerPage extends StatefulWidget {
   final Map<String, dynamic>? existingData;
   final bool isEdit;
 
-  const AddCustomerPage({super.key, this.docId, this.existingData, this.isEdit = false});
+  const AddCustomerPage({
+    super.key,
+    this.docId,
+    this.existingData,
+    this.isEdit = false,
+  });
 
   @override
   State<AddCustomerPage> createState() => _AddCustomerPageState();
@@ -35,9 +40,12 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       _nameController.text = widget.existingData!['name'] ?? '';
       _phoneController.text = widget.existingData!['phone'] ?? '';
       if (widget.isEdit) {
-        _previousBalanceController.text = (widget.existingData!['previousBalance'] ?? 0).toString();
+        _previousBalanceController.text =
+            (widget.existingData!['previousBalance'] ?? 0).toString();
       } else {
-        double previousBalance = (widget.existingData!['currentBill'] ?? 0.0) - (widget.existingData!['paidNow'] ?? 0.0);
+        double previousBalance =
+            (widget.existingData!['currentBill'] ?? 0.0) -
+            (widget.existingData!['paidNow'] ?? 0.0);
         _previousBalanceController.text = previousBalance.toStringAsFixed(2);
       }
       _calculateTotal();
@@ -97,7 +105,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     final invoiceData = Map<String, dynamic>.from(customerData);
     if (widget.docId != null && !widget.isEdit) {
       // Existing customer, new sale -> add current transaction payment to existing total for invoice view
-      invoiceData['paidNow'] = (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
+      invoiceData['paidNow'] =
+          (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
     } else {
       // New customer or editing customer -> paidNow is just the current value
       invoiceData['paidNow'] = paidNow;
@@ -107,11 +116,17 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       final batch = FirebaseFirestore.instance.batch();
       DocumentReference customerRef;
 
-      if (widget.docId != null) { // Existing customer
-        customerRef = FirebaseFirestore.instance.collection('customers').doc(widget.docId);
-        customerData['paidNow'] = widget.isEdit ? paidNow : FieldValue.increment(paidNow);
+      if (widget.docId != null) {
+        // Existing customer
+        customerRef = FirebaseFirestore.instance
+            .collection('customers')
+            .doc(widget.docId);
+        customerData['paidNow'] = widget.isEdit
+            ? paidNow
+            : FieldValue.increment(paidNow);
         batch.update(customerRef, customerData);
-      } else { // New customer
+      } else {
+        // New customer
         customerRef = FirebaseFirestore.instance.collection('customers').doc();
         customerData['paidNow'] = paidNow;
         batch.set(customerRef, customerData);
@@ -119,7 +134,9 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
 
       if (!widget.isEdit) {
         // Create a transaction record
-        final transactionRef = FirebaseFirestore.instance.collection('transactions').doc();
+        final transactionRef = FirebaseFirestore.instance
+            .collection('transactions')
+            .doc();
         batch.set(transactionRef, {
           'entityId': customerRef.id,
           'entityName': _nameController.text,
@@ -159,8 +176,11 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              InvoicePage(docId: customerRef.id, data: invoiceData, type: 'customer'),
+          builder: (_) => InvoicePage(
+            docId: customerRef.id,
+            data: invoiceData,
+            type: 'customer',
+          ),
         ),
       );
     } catch (e) {
@@ -177,7 +197,9 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.isEdit ? 'Edit Customer' : (widget.docId != null ? 'New Sale' : 'Add Customer'),
+          widget.isEdit
+              ? 'Edit Customer'
+              : (widget.docId != null ? 'New Sale' : 'Add Customer'),
         ),
       ),
       body: Stack(
@@ -189,14 +211,20 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               children: [
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Name', prefixIcon: Icon(Icons.person)),
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    prefixIcon: Icon(Icons.person),
+                  ),
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   enabled: widget.docId == null || widget.isEdit,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone)),
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.phone),
+                  ),
                   keyboardType: TextInputType.phone,
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                   enabled: widget.docId == null || widget.isEdit,
@@ -204,7 +232,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _previousBalanceController,
-                  decoration: const InputDecoration(labelText: 'Previous Balance', prefixIcon: Icon(Icons.account_balance_wallet)),
+                  decoration: const InputDecoration(
+                    labelText: 'Previous Balance',
+                    prefixIcon: Icon(Icons.account_balance_wallet),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                   enabled: false,
@@ -220,21 +251,30 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _additionalChargeController,
-                  decoration: const InputDecoration(labelText: 'Additional Charge', prefixIcon: Icon(Icons.add_circle_outline)),
+                  decoration: const InputDecoration(
+                    labelText: 'Additional Charge',
+                    prefixIcon: Icon(Icons.add_circle_outline),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _discountController,
-                  decoration: const InputDecoration(labelText: 'Discount', prefixIcon: Icon(Icons.remove_circle_outline)),
+                  decoration: const InputDecoration(
+                    labelText: 'Discount',
+                    prefixIcon: Icon(Icons.remove_circle_outline),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _taxController,
-                  decoration: const InputDecoration(labelText: 'Tax (%)', prefixIcon: Icon(Icons.receipt)),
+                  decoration: const InputDecoration(
+                    labelText: 'Tax (%)',
+                    prefixIcon: Icon(Icons.receipt),
+                  ),
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateTotal(),
                 ),
@@ -257,7 +297,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _paidNowController,
-                  decoration: const InputDecoration(labelText: 'Paid Now', prefixIcon: Icon(Icons.payment)),
+                  decoration: const InputDecoration(
+                    labelText: 'Paid Now',
+                    prefixIcon: Icon(Icons.payment),
+                  ),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 24),
@@ -265,6 +308,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   onPressed: _saveCustomer,
                   child: const Text('Save', style: TextStyle(fontSize: 18)),
                 ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -289,10 +333,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
           isPurchase: false, // It's a sale, so not a purchase
           onUpdate: (updatedProduct) {
             setState(() {
-              _selectedProducts[index] = {
-                ...product,
-                ...updatedProduct,
-              };
+              _selectedProducts[index] = {...product, ...updatedProduct};
               _calculateTotal();
             });
           },

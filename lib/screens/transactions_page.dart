@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:salesbook/provider/language_provider.dart';
 import 'invoice_page.dart';
 
 class TransactionsPage extends StatefulWidget {
@@ -21,6 +23,56 @@ class _TransactionsPageState extends State<TransactionsPage> {
   String _filterType = 'today';
   DateTime? _startDate;
   DateTime? _endDate;
+
+  // Function to get Malayalam translation for transaction types
+  String _getTransactionTypeText(String type, bool isMalayalam) {
+    if (!isMalayalam) return type;
+
+    switch (type.toLowerCase()) {
+      case 'cash received from vendor':
+        return 'വെണ്ടറിൽ നിന്ന് പണം ലഭിച്ചു';
+      case 'cash paid to vendor':
+        return 'വെണ്ടർക്ക് പണം നൽകി';
+      case 'purchase':
+        return 'സാധനങ്ങൾ വാങ്ങി';
+      case 'cash paid to customer':
+        return 'കസ്റ്റമർക്ക് പണം നൽകി';
+      case 'cash received from customer':
+        return 'കസ്റ്റമറിൽ നിന്ന് പണം ലഭിച്ചു';
+      case 'sale':
+        return 'സാധനങ്ങൾ വിറ്റു';
+      case 'return':
+        return 'സാധനങ്ങൾ തിരിച്ചെടുത്തു';
+      case 'payment':
+        return 'പേയ്മെന്റ്';
+      default:
+        return type;
+    }
+  }
+
+  // Function to get Malayalam translation for filter labels
+  String _getFilterLabel(String label, bool isMalayalam) {
+    if (!isMalayalam) return label;
+
+    switch (label.toLowerCase()) {
+      case 'today':
+        return 'ഇന്ന്';
+      case 'this week':
+        return 'ഈ ആഴ്ച';
+      case 'this month':
+        return 'ഈ മാസം';
+      case 'all':
+        return 'എല്ലാം';
+      case 'custom':
+        return 'കസ്റ്റം';
+      case 'start date':
+        return 'ആരംഭ തീയതി';
+      case 'end date':
+        return 'അവസാന തീയതി';
+      default:
+        return label;
+    }
+  }
 
   Stream<QuerySnapshot> _getFilteredStream() {
     Query query = FirebaseFirestore.instance
@@ -82,135 +134,139 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '${widget.entityType} Transactions',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Theme.of(context).primaryColor,
-        elevation: 0,
-      ),
-      body: Container(
-        // decoration: BoxDecoration(
-        //   gradient: LinearGradient(
-        //     colors: [
-        //       Theme.of(context).primaryColor,
-        //       Theme.of(context).primaryColorLight,
-        //     ],
-        //     begin: Alignment.topLeft,
-        //     end: Alignment.bottomRight,
-        //   ),
-        // ),
-        child: Column(
-          children: [
-            _buildFilterChips(),
-            Expanded(
-              child: StreamBuilder(
-                stream: _getFilteredStream(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.black87,
-                        ),
-                      ),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text(
-                        'Error: ${snapshot.error}',
-                        style: const TextStyle(color: Colors.black87),
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No transactions for the selected period',
-                        style: TextStyle(color: Colors.black87),
-                      ),
-                    );
-                  }
-                  final transactions = snapshot.data!.docs;
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: transactions.length,
-                    itemBuilder: (context, index) {
-                      final transaction =
-                          transactions[index].data() as Map<String, dynamic>;
-                      final docId = transactions[index].id;
-                      final date = (transaction['timestamp'] as Timestamp)
-                          .toDate();
-                      final paymentMethod = transaction['paymentMethod'] != null
-                          ? ' - ${transaction['paymentMethod']}'
-                          : '';
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: Colors.grey[200],
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          side: BorderSide(color: Colors.teal.withOpacity(0.2)),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          title: Text(
-                            '${transaction['type']}$paymentMethod',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          subtitle: Text(
-                            DateFormat('dd MMM yyyy, hh:mm a').format(date),
-                            style: const TextStyle(color: Colors.black87),
-                          ),
-                          trailing: Text(
-                            '﷼${(transaction['amount'] as num).toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color:
-                                  transaction['type'] == 'Sale' ||
-                                      transaction['type'] == 'Payment'
-                                  ? Colors.green
-                                  : Colors.redAccent,
-                            ),
-                          ),
-                          onTap: () {
-                            if (transaction['type'] != 'Payment') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => InvoicePage(
-                                    docId: docId,
-                                    data: transaction,
-                                    type: transaction['entityType']
-                                        .toLowerCase(),
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
+    return Consumer<LanguageProvider>(
+      builder: (context, lang, _) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              '${widget.entityType} Transactions',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
-        ),
-      ),
+            backgroundColor: Theme.of(context).primaryColor,
+            elevation: 0,
+          ),
+          body: Container(
+            child: Column(
+              children: [
+                _buildFilterChips(lang),
+                Expanded(
+                  child: StreamBuilder(
+                    stream: _getFilteredStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.black87,
+                            ),
+                          ),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Error: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.black87),
+                          ),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return Center(
+                          child: Text(
+                            lang.isMalayalam
+                                ? 'തിരഞ്ഞെടുത്ത കാലയളവിൽ ഇടപാടുകളൊന്നുമില്ല'
+                                : 'No transactions for the selected period',
+                            style: const TextStyle(color: Colors.black87),
+                          ),
+                        );
+                      }
+                      final transactions = snapshot.data!.docs;
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: transactions.length,
+                        itemBuilder: (context, index) {
+                          final transaction =
+                              transactions[index].data()
+                                  as Map<String, dynamic>;
+                          final docId = transactions[index].id;
+                          final date = (transaction['timestamp'] as Timestamp)
+                              .toDate();
+                          final paymentMethod =
+                              transaction['paymentMethod'] != null
+                              ? ' - ${transaction['paymentMethod']}'
+                              : '';
+
+                          // Get translated transaction type
+                          final transactionType = _getTransactionTypeText(
+                            transaction['type'],
+                            lang.isMalayalam,
+                          );
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            color: Colors.grey[200],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                              side: BorderSide(
+                                color: Colors.teal.withOpacity(0.2),
+                              ),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(16),
+                              title: Text(
+                                '$transactionType$paymentMethod',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              subtitle: Text(
+                                DateFormat('dd MMM yyyy, hh:mm a').format(date),
+                                style: const TextStyle(color: Colors.black87),
+                              ),
+                              trailing: Text(
+                                '﷼${(transaction['amount'] as num).toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.teal,
+                                ),
+                              ),
+                              onTap: () {
+                                if (transaction['type'] != 'Payment') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => InvoicePage(
+                                        docId: docId,
+                                        data: transaction,
+                                        type: transaction['entityType']
+                                            .toLowerCase(),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildFilterChips() {
+  Widget _buildFilterChips(LanguageProvider lang) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -219,11 +275,11 @@ class _TransactionsPageState extends State<TransactionsPage> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildFilterChip('Today', 'today'),
-              _buildFilterChip('This Week', 'week'),
-              _buildFilterChip('This Month', 'month'),
-              _buildFilterChip('All', 'all'),
-              _buildFilterChip('Custom', 'custom'),
+              _buildFilterChip('Today', 'today', lang),
+              _buildFilterChip('This Week', 'week', lang),
+              _buildFilterChip('This Month', 'month', lang),
+              _buildFilterChip('All', 'all', lang),
+              _buildFilterChip('Custom', 'custom', lang),
             ],
           ),
           if (_filterType == 'custom') ...[
@@ -248,8 +304,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     label: Text(
                       _startDate != null
                           ? DateFormat('dd/MM/yy').format(_startDate!)
-                          : 'Start Date',
-                      style: TextStyle(color: Colors.white),
+                          : _getFilterLabel('Start Date', lang.isMalayalam),
+                      style: const TextStyle(color: Colors.white),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
@@ -268,12 +324,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       );
                       if (date != null) setState(() => _endDate = date);
                     },
-                    icon: Icon(Icons.calendar_today, color: Colors.white),
+                    icon: const Icon(Icons.calendar_today, color: Colors.white),
                     label: Text(
                       _endDate != null
                           ? DateFormat('dd/MM/yy').format(_endDate!)
-                          : 'End Date',
-                      style: TextStyle(color: Colors.white),
+                          : _getFilterLabel('End Date', lang.isMalayalam),
+                      style: const TextStyle(color: Colors.white),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal,
@@ -288,9 +344,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
+  Widget _buildFilterChip(String label, String value, LanguageProvider lang) {
     return FilterChip(
-      label: Text(label),
+      label: Text(_getFilterLabel(label, lang.isMalayalam)),
       selected: _filterType == value,
       onSelected: (selected) {
         setState(() {

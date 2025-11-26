@@ -47,7 +47,9 @@ class _PaymentPageState extends State<PaymentPage> {
 
     try {
       final batch = FirebaseFirestore.instance.batch();
-      final docRef = FirebaseFirestore.instance.collection(widget.type).doc(widget.docId);
+      final docRef = FirebaseFirestore.instance
+          .collection(widget.type)
+          .doc(widget.docId);
 
       // Determine the transaction details based on the type
       String transactionDetail;
@@ -59,22 +61,27 @@ class _PaymentPageState extends State<PaymentPage> {
         if (_transactionType == TransactionType.getCash) {
           transactionDetail = 'Cash Received from Customer';
           newPaidNowValue = FieldValue.increment(amount);
-        } else { // Pay Cash
+        } else {
+          // Pay Cash
           transactionDetail = 'Cash Paid to Customer';
           newPaidNowValue = FieldValue.increment(-amount);
         }
-      } else { // vendors
+      } else {
+        // vendors
         if (_transactionType == TransactionType.payCash) {
           transactionDetail = 'Cash Paid to Vendor';
           newPaidNowValue = FieldValue.increment(amount);
-        } else { // Get Cash
+        } else {
+          // Get Cash
           transactionDetail = 'Cash Received from Vendor';
           newPaidNowValue = FieldValue.increment(-amount);
         }
       }
 
       // Create a transaction record
-      final transactionRef = FirebaseFirestore.instance.collection('transactions').doc();
+      final transactionRef = FirebaseFirestore.instance
+          .collection('transactions')
+          .doc();
       batch.set(transactionRef, {
         'entityId': widget.docId,
         'entityType': widget.type == 'customers' ? 'Customer' : 'Vendor',
@@ -92,15 +99,19 @@ class _PaymentPageState extends State<PaymentPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Transaction saved successfully!')),
+          const SnackBar(
+            content: Text('Transaction saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
         );
+        Navigator.pop(context);
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving transaction: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving transaction: $e')));
       }
     } finally {
       if (mounted) {
@@ -129,7 +140,8 @@ class _PaymentPageState extends State<PaymentPage> {
         balanceText = 'Settled';
         balanceColor = Colors.grey;
       }
-    } else { // vendors
+    } else {
+      // vendors
       if (balance > 0) {
         balanceText = 'You will pay: ﷼${balance.toStringAsFixed(2)}';
         balanceColor = Colors.red;
@@ -143,9 +155,7 @@ class _PaymentPageState extends State<PaymentPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cash Transaction'),
-      ),
+      appBar: AppBar(title: const Text('Pay/Get Cash')),
       body: Stack(
         children: [
           Padding(
@@ -181,7 +191,10 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Select Transaction Type', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Select Transaction Type',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                   RadioListTile<TransactionType>(
                     title: const Text('Get Cash'),
                     value: TransactionType.getCash,
@@ -223,7 +236,10 @@ class _PaymentPageState extends State<PaymentPage> {
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _saveTransaction,
-                    child: const Text('Save Transaction', style: TextStyle(fontSize: 18)),
+                    child: const Text(
+                      'Save Transaction',
+                      style: TextStyle(fontSize: 18),
+                    ),
                   ),
                 ],
               ),
@@ -232,9 +248,7 @@ class _PaymentPageState extends State<PaymentPage> {
           if (_isLoading)
             Container(
               color: Colors.black.withOpacity(0.5),
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: const Center(child: CircularProgressIndicator()),
             ),
         ],
       ),
