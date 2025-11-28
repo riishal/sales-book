@@ -62,18 +62,22 @@ class _HomePageState extends State<HomePage> {
           Consumer<LanguageProvider>(
             builder: (context, lang, _) {
               return CircleAvatar(
+                radius: 18,
                 backgroundColor: Colors.white,
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.language, color: Colors.teal),
-                  onSelected: (String value) {
-                    lang.toggleLanguage();
-                  },
-                  itemBuilder: (BuildContext context) => [
-                    PopupMenuItem<String>(
-                      value: 'language',
-                      child: Text(lang.isMalayalam ? 'English' : 'മലയാളം'),
+                child: Center(
+                  child: TextButton(
+                    onPressed: () {
+                      lang.toggleLanguage();
+                    },
+                    child: Text(
+                      lang.isMalayalam ? 'E' : 'മ',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.teal,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               );
             },
@@ -81,155 +85,175 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 10),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // _buildFilterChips(loc),
-            // const SizedBox(height: 24),
-            StreamBuilder(
-              stream: FirebaseFirestore.instance
-                  .collection('customers')
-                  .snapshots(),
-              builder: (context, cSnap) {
-                return StreamBuilder(
+      body: Consumer<LanguageProvider>(
+        builder: (context, lang, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // _buildFilterChips(loc),
+                // const SizedBox(height: 24),
+                StreamBuilder(
                   stream: FirebaseFirestore.instance
-                      .collection('vendors')
+                      .collection('customers')
                       .snapshots(),
-                  builder: (context, vSnap) {
+                  builder: (context, cSnap) {
                     return StreamBuilder(
-                      stream: _getFilteredQuery().snapshots(),
-                      builder: (context, tSnap) {
-                        double receivable = 0, payable = 0, netChange = 0;
+                      stream: FirebaseFirestore.instance
+                          .collection('vendors')
+                          .snapshots(),
+                      builder: (context, vSnap) {
+                        return StreamBuilder(
+                          stream: _getFilteredQuery().snapshots(),
+                          builder: (context, tSnap) {
+                            double youWillGet = 0;
+                            double youWillPay = 0;
 
-                        // Calculate Receivable (what customers owe you)
-                        if (cSnap.hasData) {
-                          for (var doc in cSnap.data!.docs) {
-                            final d = doc.data();
-                            double currentBill = (d['currentBill'] ?? 0)
-                                .toDouble();
-                            double paidNow = (d['paidNow'] ?? 0).toDouble();
-                            receivable += (currentBill - paidNow);
-                          }
-                        }
-
-                        // Calculate Payable (what you owe vendors)
-                        if (vSnap.hasData) {
-                          for (var doc in vSnap.data!.docs) {
-                            final d = doc.data();
-                            double currentBill = (d['currentBill'] ?? 0)
-                                .toDouble();
-                            double paidNow = (d['paidNow'] ?? 0).toDouble();
-                            payable += (currentBill - paidNow);
-                          }
-                        }
-
-                        // Calculate Net Change from filtered transactions
-                        if (tSnap.hasData) {
-                          for (var doc in tSnap.data!.docs) {
-                            final d = doc.data() as Map<String, dynamic>?;
-                            if (d != null) {
-                              double paidAmount = (d['paidNow'] ?? 0)
-                                  .toDouble();
-
-                              if (d['entityType'] == 'Customer') {
-                                // Money received from customers (positive)
-                                netChange += paidAmount;
-                              } else if (d['entityType'] == 'Vendor') {
-                                // Money paid to vendors (negative)
-                                netChange -= paidAmount;
+                            // Calculate balances for customers
+                            if (cSnap.hasData) {
+                              for (var doc in cSnap.data!.docs) {
+                                final d = doc.data();
+                                double balance =
+                                    (d['currentBill'] ?? 0).toDouble() -
+                                    (d['paidNow'] ?? 0).toDouble();
+                                if (balance > 0) {
+                                  youWillGet += balance;
+                                } else {
+                                  youWillPay += balance.abs();
+                                }
                               }
                             }
-                          }
-                        }
 
-                        return Column(
-                          children: [
-                            // Net Change Card
-                            // _buildBigCard(
-                            //   loc.netChange,
-                            //   '﷼${netChange.toStringAsFixed(2)}',
-                            //   Icons.account_balance_wallet,
-                            //   netChange >= 0 ? Colors.teal : Colors.red,
-                            // ),
-                            // const SizedBox(height: 16),
-                            // Row(
-                            //   children: [
-                            //     Expanded(
-                            //       child: _buildCard(
-                            //         loc.receivable,
-                            //         '﷼${receivable.toStringAsFixed(2)}',
-                            //         Icons.arrow_downward,
-                            //         Colors.green,
-                            //       ),
-                            //     ),
-                            //     const SizedBox(width: 10),
-                            //     Expanded(
-                            //       child: _buildCard(
-                            //         loc.payable,
-                            //         '﷼${payable.toStringAsFixed(2)}',
-                            //         Icons.arrow_upward,
-                            //         Colors.red,
-                            //       ),
-                            //     ),
-                            //   ],
-                            // ),
-                          ],
+                            // Calculate balances for vendors
+                            if (vSnap.hasData) {
+                              for (var doc in vSnap.data!.docs) {
+                                final d = doc.data();
+                                double balance =
+                                    (d['currentBill'] ?? 0).toDouble() -
+                                    (d['paidNow'] ?? 0).toDouble();
+                                if (balance > 0) {
+                                  youWillPay += balance;
+                                } else {
+                                  youWillGet += balance.abs();
+                                }
+                              }
+                            }
+
+                            // Calculate Net Change from filtered transactions
+                            if (tSnap.hasData) {
+                              double netChange = 0;
+                              for (var doc in tSnap.data!.docs) {
+                                final d = doc.data() as Map<String, dynamic>?;
+                                if (d != null) {
+                                  double paidAmount = (d['paidNow'] ?? 0)
+                                      .toDouble();
+
+                                  if (d['entityType'] == 'Customer') {
+                                    // Money received from customers (positive)
+                                    netChange += paidAmount;
+                                  } else if (d['entityType'] == 'Vendor') {
+                                    // Money paid to vendors (negative)
+                                    netChange -= paidAmount;
+                                  }
+                                }
+                              }
+                            }
+
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: _buildCard(
+                                        lang.isMalayalam
+                                            ? 'നിങ്ങൾക്ക് കിട്ടാനുള്ളത്'
+                                            : 'You will get',
+                                        '﷼${youWillGet.toStringAsFixed(2)}',
+                                        Icons.arrow_downward,
+                                        Colors.green,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildCard(
+                                        lang.isMalayalam
+                                            ? 'നിങ്ങൾക്ക് കൊടുക്കാനുള്ളത്'
+                                            : 'You will pay',
+                                        '﷼${youWillPay.toStringAsFixed(2)}',
+                                        Icons.arrow_upward,
+                                        Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
                         );
                       },
                     );
                   },
-                );
-              },
-            ),
-            // const SizedBox(height: 32),
-            // Text(loc.features, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.2,
-              children: [
-                _featureCard(
-                  loc.customers,
-                  Icons.people,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CustomerListPage()),
-                  ),
                 ),
-                _featureCard(
-                  loc.vendors,
-                  Icons.store,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const VendorListPage()),
-                  ),
-                ),
-                _featureCard(
-                  loc.products,
-                  Icons.inventory_2,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProductListPage()),
-                  ),
-                ),
-                _featureCard(
-                  loc.reports,
-                  Icons.bar_chart,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReportsPage()),
-                  ),
+                // const SizedBox(height: 32),
+                // Text(loc.features, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 16),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.2,
+                  children: [
+                    _featureCard(
+                      loc.customers,
+                      Icons.people,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CustomerListPage(),
+                        ),
+                      ),
+                    ),
+                    _featureCard(
+                      loc.vendors,
+                      Icons.store,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const VendorListPage(),
+                        ),
+                      ),
+                    ),
+                    _featureCard(
+                      loc.products,
+                      Icons.inventory_2,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ProductListPage(),
+                        ),
+                      ),
+                    ),
+                    _featureCard(
+                      loc.reports,
+                      Icons.bar_chart,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ReportsPage()),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -347,16 +371,19 @@ class _HomePageState extends State<HomePage> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(icon, size: 36, color: color),
             const SizedBox(height: 8),
             Text(
               title,
               style: TextStyle(
-                fontSize: provider.isMalayalam ? 13 : 16,
+                fontSize: provider.isMalayalam ? 12 : 16,
                 color: Colors.black,
               ),
             ),
+            const SizedBox(height: 4),
             Text(
               value,
               style: TextStyle(

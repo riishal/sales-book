@@ -13,7 +13,35 @@ class CustomerListPage extends StatelessWidget {
     return Consumer<LanguageProvider>(
       builder: (context, lang, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Customers')),
+          appBar: AppBar(
+            title: const Text('Customers'),
+            actions: [
+              Consumer<LanguageProvider>(
+                builder: (context, lang, _) {
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: Center(
+                      child: TextButton(
+                        onPressed: () {
+                          lang.toggleLanguage();
+                        },
+                        child: Text(
+                          lang.isMalayalam ? 'E' : 'മ',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.teal,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 10),
+            ],
+          ),
           body: StreamBuilder(
             stream: FirebaseFirestore.instance
                 .collection('customers')

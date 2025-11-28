@@ -100,6 +100,32 @@ class _ReportsPageState extends State<ReportsPage>
                 fontWeight: FontWeight.bold,
               ),
             ),
+            actions: [
+              Consumer<LanguageProvider>(
+                builder: (context, lang, _) {
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: Center(
+                      child: TextButton(
+                        onPressed: () {
+                          lang.toggleLanguage();
+                        },
+                        child: Text(
+                          lang.isMalayalam ? 'E' : 'മ',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.teal,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 10),
+            ],
             backgroundColor: Theme.of(context).primaryColor,
             elevation: 0,
             bottom: TabBar(

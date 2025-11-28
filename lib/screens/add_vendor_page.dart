@@ -31,7 +31,8 @@ class _AddVendorPageState extends State<AddVendorPage> {
   final _taxController = TextEditingController(text: '0');
   final _paidNowController = TextEditingController(text: '0');
   List<Map<String, dynamic>> _selectedProducts = [];
-  double _currentBill = 0;
+  double _transactionTotal = 0;
+  double _grandTotal = 0;
   bool _isLoading = false;
 
   @override
@@ -62,8 +63,10 @@ class _AddVendorPageState extends State<AddVendorPage> {
     double discount = double.tryParse(_discountController.text) ?? 0;
     double tax = double.tryParse(_taxController.text) ?? 0;
     double previous = double.tryParse(_previousBalanceController.text) ?? 0;
-    _currentBill =
-        subtotal + additional - discount + (subtotal * tax / 100) + previous;
+
+    _transactionTotal =
+        subtotal + additional - discount + (subtotal * tax / 100);
+    _grandTotal = _transactionTotal + previous;
     setState(() {});
   }
 
@@ -96,7 +99,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
       'name': _nameController.text,
       'phone': _phoneController.text,
       'previousBalance': double.parse(_previousBalanceController.text),
-      'currentBill': _currentBill,
+      'currentBill': _grandTotal,
       'additionalCharge': double.parse(_additionalChargeController.text),
       'discount': double.parse(_discountController.text),
       'tax': double.parse(_taxController.text),
@@ -106,14 +109,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
 
     // Data for invoice needs a concrete paidNow value.
     final invoiceData = Map<String, dynamic>.from(vendorData);
-    if (widget.docId != null && !widget.isEdit) {
-      // Existing vendor, new purchase -> add current payment to existing total for invoice
-      invoiceData['paidNow'] =
-          (widget.existingData?['paidNow'] ?? 0.0) + paidNow;
-    } else {
-      // New vendor or editing vendor -> paidNow is just the current value
-      invoiceData['paidNow'] = paidNow;
-    }
+    invoiceData['paidNow'] = paidNow;
 
     try {
       final batch = FirebaseFirestore.instance.batch();
@@ -124,10 +120,16 @@ class _AddVendorPageState extends State<AddVendorPage> {
         vendorRef = FirebaseFirestore.instance
             .collection('vendors')
             .doc(widget.docId);
-        vendorData['paidNow'] = widget.isEdit
-            ? paidNow
-            : FieldValue.increment(paidNow);
-        batch.update(vendorRef, vendorData);
+        if (widget.isEdit) {
+          vendorData['paidNow'] = paidNow;
+          batch.update(vendorRef, vendorData);
+        } else {
+          batch.update(vendorRef, {
+            'currentBill': FieldValue.increment(_transactionTotal),
+            'paidNow': FieldValue.increment(paidNow),
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+        }
       } else {
         // New vendor
         vendorRef = FirebaseFirestore.instance.collection('vendors').doc();
@@ -145,7 +147,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
           'entityName': _nameController.text,
           'entityType': 'Vendor',
           'type': 'Purchase',
-          'amount': _currentBill,
+          'amount': _transactionTotal,
           'paidNow': paidNow,
           'products': _selectedProducts,
           'additionalCharge': double.parse(_additionalChargeController.text),
@@ -155,20 +157,28 @@ class _AddVendorPageState extends State<AddVendorPage> {
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        // Use a loop to get product references and add updates to the batch
-        for (var product in _selectedProducts) {
+        // Get all product names to fetch them in a single query
+        final productNames = _selectedProducts.map((p) => p['name']).toList();
+        if (productNames.isNotEmpty) {
           final productQuery = await FirebaseFirestore.instance
               .collection('products')
-              .where('name', isEqualTo: product['name'])
-              .limit(1)
+              .where('name', whereIn: productNames)
               .get();
 
-          if (productQuery.docs.isNotEmpty) {
-            final productDocRef = productQuery.docs.first.reference;
-            batch.update(productDocRef, {
-              'qty': FieldValue.increment((product['qty'] as num).toInt()),
-              'price': product['rate'],
-            });
+          // Create a map for quick lookups
+          final productDocs = {
+            for (var doc in productQuery.docs)
+              doc.data()['name']: doc.reference,
+          };
+
+          for (var product in _selectedProducts) {
+            if (productDocs.containsKey(product['name'])) {
+              final productDocRef = productDocs[product['name']]!;
+              batch.update(productDocRef, {
+                'qty': FieldValue.increment((product['qty'] as num).toInt()),
+                'price': product['rate'],
+              });
+            }
           }
         }
       }
@@ -311,13 +321,36 @@ class _AddVendorPageState extends State<AddVendorPage> {
                     color: Theme.of(context).primaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    'Total Bill: ﷼${_currentBill.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bill Amount: ﷼${_transactionTotal.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Balance: ${_previousBalanceController.text}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Total Amount: ﷼${_grandTotal.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),

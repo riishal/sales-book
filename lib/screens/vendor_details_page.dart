@@ -54,19 +54,30 @@ class VendorDetailsPage extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
             actions: [
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.language, color: Colors.white),
-                onSelected: (String value) {
-                  lang.toggleLanguage();
+              Consumer<LanguageProvider>(
+                builder: (context, lang, _) {
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: Center(
+                      child: TextButton(
+                        onPressed: () {
+                          lang.toggleLanguage();
+                        },
+                        child: Text(
+                          lang.isMalayalam ? 'E' : 'മ',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.teal,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
                 },
-                itemBuilder: (BuildContext context) => [
-                  PopupMenuItem<String>(
-                    value: 'language',
-                    child: Text(lang.isMalayalam ? 'English' : 'മലയാളം'),
-                  ),
-                ],
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 10),
             ],
           ),
           body: ListView(
