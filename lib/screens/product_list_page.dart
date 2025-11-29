@@ -25,23 +25,15 @@ class ProductListPage extends StatelessWidget {
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Scaffold(
-              appBar: AppBar(
-                title: const Text('Products (0)'),
-              ),
-              body: const Center(
-                child: Text(
-                  'No products yet',
-                ),
-              ),
+              appBar: AppBar(title: const Text('Products (0)')),
+              body: const Center(child: Text('No products yet')),
               floatingActionButton: _buildFloatingActionButton(context),
             );
           }
 
           final products = snapshot.data!.docs;
           return Scaffold(
-            appBar: AppBar(
-              title: Text('Products (${products.length})'),
-            ),
+            appBar: AppBar(title: Text('Products (${products.length})')),
             body: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: products.length,
@@ -53,49 +45,46 @@ class ProductListPage extends StatelessWidget {
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
                     leading: CircleAvatar(
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                      child: Icon(Icons.inventory_2, color: Theme.of(context).primaryColor),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).primaryColor.withOpacity(0.1),
+                      child: Icon(
+                        Icons.inventory_2,
+                        color: Theme.of(context).primaryColor,
+                      ),
                     ),
                     title: Text(
                       product['name'],
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Price: ﷼${product['price']}',
-                        ),
-                        Text(
-                          'Qty: ${product['qty']} ${product['unit']}',
-                        ),
+                        Text('Price: ﷼${product['price']}'),
+                        Text('Qty: ${product['qty']} ${product['unit']}'),
                         if ((product['discount'] ?? 0) > 0)
-                          Text(
-                            'Discount: ${product['discount']}%',
-                          ),
+                          Text('Discount: ${product['discount']}%'),
                         if ((product['tax'] ?? 0) > 0)
-                          Text(
-                            'Tax: ${product['tax']}%',
-                          ),
+                          Text('Tax: ${product['tax']}%'),
                       ],
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () async {
-                        await FirebaseFirestore.instance
-                            .collection('products')
-                            .doc(docId)
-                            .delete();
-                      },
-                    ),
+                    // trailing: IconButton(
+                    //   icon: const Icon(Icons.delete),
+                    //   onPressed: () async {
+                    //     await FirebaseFirestore.instance
+                    //         .collection('products')
+                    //         .doc(docId)
+                    //         .delete();
+                    //   },
+                    // ),
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              AddProductPage(docId: docId, existingData: product),
+                          builder: (_) => AddProductPage(
+                            docId: docId,
+                            existingData: product,
+                          ),
                         ),
                       );
                     },

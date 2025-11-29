@@ -181,13 +181,13 @@ class VendorDetailsPage extends StatelessWidget {
             ),
           );
         }),
-        _buildFeatureCard(context, 'Delete', Icons.delete, () async {
-          await FirebaseFirestore.instance
-              .collection('vendors')
-              .doc(docId)
-              .delete();
-          Navigator.pop(context);
-        }),
+        // _buildFeatureCard(context, 'Delete', Icons.delete, () async {
+        //   await FirebaseFirestore.instance
+        //       .collection('vendors')
+        //       .doc(docId)
+        //       .delete();
+        //   Navigator.pop(context);
+        // }),
       ],
     );
   }

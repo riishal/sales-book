@@ -189,13 +189,13 @@ class CustomerDetailsPage extends StatelessWidget {
             ),
           );
         }),
-        _buildFeatureCard(context, 'Delete', Icons.delete, () async {
-          await FirebaseFirestore.instance
-              .collection('customers')
-              .doc(docId)
-              .delete();
-          Navigator.pop(context);
-        }),
+        // _buildFeatureCard(context, 'Delete', Icons.delete, () async {
+        //   await FirebaseFirestore.instance
+        //       .collection('customers')
+        //       .doc(docId)
+        //       .delete();
+        //   Navigator.pop(context);
+        // }),
       ],
     );
   }
