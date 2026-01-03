@@ -144,9 +144,10 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                   ),
                   itemCount: products.length,
                   itemBuilder: (context, index) {
-                    final product = products[index].data();
+                    final productDoc = products[index];
+                    final product = productDoc.data();
                     final selectedProduct = _tempSelected.firstWhere(
-                      (p) => p['name'] == product['name'],
+                      (p) => p['id'] == productDoc.id,
                       orElse: () => {},
                     );
                     final isSelected = selectedProduct.isNotEmpty;
@@ -163,6 +164,7 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                               setState(() {
                                 if (!isSelected) {
                                   _tempSelected.add({
+                                    'id': productDoc.id,
                                     'name': product['name'],
                                     'rate': price,
                                     'qty': 1,
@@ -221,16 +223,16 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                                           color: Colors.teal[700],
                                         ),
                                       ),
-                                      if (!widget.isPurchase)
-                                        Text(
-                                          'Stock: ${product['qty'] ?? 0}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isOutOfStock
-                                                ? Colors.redAccent
-                                                : Colors.grey,
-                                          ),
+                                      // if (!widget.isPurchase)
+                                      Text(
+                                        'Stock: ${product['qty'] ?? 0}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isOutOfStock
+                                              ? Colors.redAccent
+                                              : Colors.grey,
                                         ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -268,8 +270,7 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                                               } else {
                                                 _tempSelected.removeWhere(
                                                   (p) =>
-                                                      p['name'] ==
-                                                      product['name'],
+                                                      p['id'] == productDoc.id,
                                                 );
                                               }
                                             });
@@ -306,7 +307,7 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                                   onTap: () {
                                     setState(() {
                                       _tempSelected.removeWhere(
-                                        (p) => p['name'] == product['name'],
+                                        (p) => p['id'] == productDoc.id,
                                       );
                                     });
                                   },

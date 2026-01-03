@@ -42,13 +42,14 @@ class _AddProductPageState extends State<AddProductPage> {
 
     final data = {
       'name': _nameController.text,
-      'price': double.parse(_priceController.text),
-      'retailPrice': double.parse(_retailPriceController.text),
-      'qty': int.parse(_qtyController.text),
+      'price': double.tryParse(_priceController.text) ?? 0.0,
+      'retailPrice': double.tryParse(_retailPriceController.text) ?? 0.0,
+      'qty': int.tryParse(_qtyController.text) ?? 0,
       'unit': _unitController.text,
-      'discount': double.parse(_discountController.text),
-      'tax': double.parse(_taxController.text),
-      'total': double.parse(_priceController.text) * int.parse(_qtyController.text),
+      'discount': double.tryParse(_discountController.text) ?? 0.0,
+      'tax': double.tryParse(_taxController.text) ?? 0.0,
+      'total': (double.tryParse(_priceController.text) ?? 0.0) *
+          (int.tryParse(_qtyController.text) ?? 0),
       'timestamp': FieldValue.serverTimestamp(),
     };
     try {
@@ -60,12 +61,15 @@ class _AddProductPageState extends State<AddProductPage> {
       } else {
         await FirebaseFirestore.instance.collection('products').add(data);
       }
+      if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }

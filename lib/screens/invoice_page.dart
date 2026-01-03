@@ -1,14 +1,15 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
-
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
-class InvoicePage extends StatelessWidget {
+class InvoicePage extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
   final String type;
@@ -20,82 +21,143 @@ class InvoicePage extends StatelessWidget {
     required this.type,
   });
 
-  String _generateInvoiceText() {
-    double subtotal = 0;
-    final productsList = (data['products'] as List? ?? [])
-        .map((p) {
-          final total = (p['rate'] ?? 0.0) * (p['qty'] as num? ?? 0);
-          subtotal += total;
-          return '${p['name']} x ${p['qty']} - riyal ${total.toStringAsFixed(2)}';
-        })
-        .join('\n');
+  @override
+  State<InvoicePage> createState() => _InvoicePageState();
+}
 
-    final balance =
-        (data['currentBill'] ?? data['amount'] ?? 0.0) -
-        (data['paidNow'] ?? 0.0);
+class _InvoicePageState extends State<InvoicePage> {
+  Uint8List? _pdfBytes;
+  bool _isLoading = true;
+  double _scale = 1.0;
 
-    return '''
-      *INVOICE*
-      -----------------
-      Name: ${data['name'] ?? data['entityName']}
-      Phone: ${data['phone'] ?? 'N/A'}
-      Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
-      -----------------
-      *Products:*
-      $productsList
-      -----------------
-      Subtotal: riyal ${subtotal.toStringAsFixed(2)}
-      Additional Charge: riyal ${(data['additionalCharge'] ?? 0.0).toStringAsFixed(2)}
-      Discount: -riyal ${(data['discount'] ?? 0.0).toStringAsFixed(2)}
-      Tax: ${(data['tax'] ?? 0.0)}%
-      Previous Balance: riyal ${(data['previousBalance'] ?? 0.0).toStringAsFixed(2)}
-      -----------------
-      *Total Bill: riyal ${(data['currentBill'] ?? data['amount'] ?? 0.0).toStringAsFixed(2)}*
-      Paid Now: riyal ${(data['paidNow'] ?? 0.0).toStringAsFixed(2)}
-      *Balance: riyal ${balance.toStringAsFixed(2)}*
-    ''';
+  @override
+  void initState() {
+    super.initState();
+    _generatePdf();
   }
 
-  Future<Uint8List> _generateModernInvoicePdf() async {
-    final pdf = pw.Document();
+  Future<void> _generatePdf() async {
+    setState(() => _isLoading = true);
+    try {
+      final bytes = await _generateInvoicePdf();
+      setState(() {
+        _pdfBytes = bytes;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
+      }
+    }
+  }
 
-    final font = await PdfGoogleFonts.openSansRegular();
-    final boldFont = await PdfGoogleFonts.openSansBold();
-
-    // Parse products
-    final List<Map<String, dynamic>> products = List<Map<String, dynamic>>.from(
-      data['products'] ?? [],
+  // 🔹 SINGLE SOURCE OF TRUTH
+  Map<String, double> _calculateTotals() {
+    final products = List<Map<String, dynamic>>.from(
+      widget.data['products'] ?? [],
     );
 
     double subtotal = 0.0;
-    for (var p in products) {
+    for (final p in products) {
       final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
       final qty = (p['qty'] as num?)?.toDouble() ?? 0.0;
       subtotal += rate * qty;
     }
 
     final additionalCharge =
-        (data['additionalCharge'] as num?)?.toDouble() ?? 0.0;
-    final discount = (data['discount'] as num?)?.toDouble() ?? 0.0;
-    final taxPercent = (data['tax'] as num?)?.toDouble() ?? 0.0;
+        (widget.data['additionalCharge'] as num?)?.toDouble() ?? 0.0;
+    final discount = (widget.data['discount'] as num?)?.toDouble() ?? 0.0;
+    final taxPercent = (widget.data['tax'] as num?)?.toDouble() ?? 0.0;
     final previousBalance =
-        (data['previousBalance'] as num?)?.toDouble() ?? 0.0;
+        (widget.data['previousBalance'] as num?)?.toDouble() ?? 0.0;
+    final paidNow = (widget.data['paidNow'] as num?)?.toDouble() ?? 0.0;
 
     final taxAmount = subtotal * (taxPercent / 100);
-    final totalBeforeBalance =
-        subtotal + additionalCharge - discount + taxAmount;
-    final grandTotal = totalBeforeBalance + previousBalance;
-    final paidNow = (data['paidNow'] as num?)?.toDouble() ?? 0.0;
-    final balanceDue = grandTotal - paidNow;
+    final grandTotal =
+        subtotal + additionalCharge - discount + taxAmount + previousBalance;
+    final balance = grandTotal - paidNow;
+
+    return {
+      'subtotal': subtotal,
+      'taxAmount': taxAmount,
+      'grandTotal': grandTotal,
+      'balance': balance,
+    };
+  }
+
+  // 🔹 SHARE TEXT
+  String _generateInvoiceText() {
+    final totals = _calculateTotals();
+
+    final productsText = (widget.data['products'] as List? ?? [])
+        .map((p) {
+          final rate = (p['rate'] ?? 0).toDouble();
+          final qty = (p['qty'] ?? 0).toDouble();
+          final total = rate * qty;
+          return '${p['name']} x ${qty.toInt()} - SAR ${total.toStringAsFixed(2)}';
+        })
+        .join('\n');
+
+    return '''
+INVOICE
+---------------------
+Name: ${widget.data['name'] ?? widget.data['entityName']}
+Phone: ${widget.data['phone'] ?? 'N/A'}
+Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}
+
+Products:
+$productsText
+---------------------
+Subtotal: SAR ${totals['subtotal']!.toStringAsFixed(2)}
+Additional Charge: SAR ${(widget.data['additionalCharge'] ?? 0).toStringAsFixed(2)}
+Discount: SAR ${(widget.data['discount'] ?? 0).toStringAsFixed(2)}
+Tax: ${(widget.data['tax'] ?? 0)}%
+Previous Balance: SAR ${(widget.data['previousBalance'] ?? 0).toStringAsFixed(2)}
+
+TOTAL: SAR ${totals['grandTotal']!.toStringAsFixed(2)}
+Paid Now: SAR ${(widget.data['paidNow'] ?? 0).toStringAsFixed(2)}
+BALANCE: SAR ${totals['balance']!.toStringAsFixed(2)}
+''';
+  }
+
+  // 🔹 PDF GENERATION
+  Future<Uint8List> _generateInvoicePdf() async {
+    final pdf = pw.Document(
+      title:
+          'Invoice_${widget.data['name'] ?? widget.data['entityName'] ?? ''}.pdf',
+    );
+    final totals = _calculateTotals();
+
+    final font = await PdfGoogleFonts.openSansRegular();
+    final boldFont = await PdfGoogleFonts.openSansBold();
+
+    final products = List<Map<String, dynamic>>.from(
+      widget.data['products'] ?? [],
+    );
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+        margin: const pw.EdgeInsets.all(30),
+        header: (context) => pw.Column(
           children: [
-            // Header
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'INVOICE',
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 32,
+                    color: PdfColors.teal700,
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 20),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
@@ -103,209 +165,156 @@ class InvoicePage extends StatelessWidget {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      "INVOICE",
-                      style: pw.TextStyle(
-                        font: boldFont,
-                        fontSize: 30,
-                        color: PdfColors.teal700,
-                      ),
+                      'Bill To:',
+                      style: pw.TextStyle(font: boldFont, fontSize: 14),
                     ),
-                    // pw.SizedBox(height: 8),
-                    // pw.Text(
-                    //   "Invoice #$docId",
-                    //   style: pw.TextStyle(font: boldFont, fontSize: 14),
-                    // ),
                     pw.Text(
-                      "Date: ${DateFormat('dd MMMM yyyy').format(DateTime.now())}",
+                      widget.data['name'] ??
+                          widget.data['entityName'] ??
+                          'Customer',
                       style: pw.TextStyle(font: font, fontSize: 12),
                     ),
+                    if (widget.data['phone'] != null)
+                      pw.Text(
+                        'Phone: ${widget.data['phone']}',
+                        style: pw.TextStyle(font: font, fontSize: 10),
+                      ),
                   ],
                 ),
-                // pw.Container(
-                //   padding: const pw.EdgeInsets.all(12),
-                //   decoration: pw.BoxDecoration(
-                //     color: PdfColors.teal50,
-                //     borderRadius: pw.BorderRadius.circular(8),
-                //   ),
-                //   child: pw.Text(
-                //     "Your Business Name\nRiyadh, Saudi Arabia",
-                //     style: pw.TextStyle(
-                //       font: boldFont,
-                //       fontSize: 12,
-                //       color: PdfColors.teal900,
-                //     ),
-                //     textAlign: pw.TextAlign.right,
-                //   ),
-                // ),
-              ],
-            ),
-
-            pw.SizedBox(height: 40),
-
-            // Bill To
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(16),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.grey100,
-                borderRadius: pw.BorderRadius.circular(10),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    "Bill To",
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 14,
-                      color: PdfColors.grey800,
-                    ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    data['name'] ?? data['entityName'] ?? 'Customer',
-                    style: pw.TextStyle(font: boldFont, fontSize: 18),
-                  ),
-                  pw.Text(
-                    "Phone: ${data['phone'] ?? 'N/A'}",
-                    style: pw.TextStyle(font: font, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-
-            pw.SizedBox(height: 30),
-
-            // Products Table
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey400, width: 1),
-              defaultColumnWidth: const pw.FlexColumnWidth(),
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.teal700),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    _tableHeader("Item"),
-                    _tableHeader("Qty", align: pw.TextAlign.center),
-                    _tableHeader("Rate", align: pw.TextAlign.right),
-                    _tableHeader("Amount", align: pw.TextAlign.right),
+                    pw.Text(
+                      'Date: ${DateFormat('dd MMM yyyy').format(DateTime.now())}',
+                      style: pw.TextStyle(font: font, fontSize: 12),
+                    ),
+                    // pw.Text(
+                    //   'Invoice #: ${widget.docId}',
+                    //   style: pw.TextStyle(font: font, fontSize: 10),
+                    // ),
                   ],
                 ),
-                ...products.map((p) {
-                  final rate = (p['rate'] as num?)?.toDouble() ?? 0.0;
-                  final qty = (p['qty'] as num?)?.toDouble() ?? 0.0;
-                  final amount = rate * qty;
-                  return pw.TableRow(
-                    children: [
-                      _tableCell(p['name']?.toString() ?? '', padding: 12),
-                      _tableCell(
-                        qty.toInt().toString(),
-                        align: pw.TextAlign.center,
-                      ),
-                      _tableCell(
-                        rate.toStringAsFixed(2),
-                        align: pw.TextAlign.right,
-                      ),
-                      _tableCell(
-                        amount.toStringAsFixed(2),
-                        align: pw.TextAlign.right,
-                        isBold: true,
-                      ),
-                    ],
-                  );
-                }),
               ],
             ),
-
-            pw.Spacer(),
-
-            // Summary Box (Right Side)
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.end,
-              children: [
-                pw.SizedBox(
-                  width: 280,
-                  child: pw.Container(
-                    padding: const pw.EdgeInsets.all(20),
-                    decoration: pw.BoxDecoration(
-                      color: PdfColors.grey50,
-                      border: pw.Border.all(color: PdfColors.grey400),
-                      borderRadius: pw.BorderRadius.circular(10),
+            pw.SizedBox(height: 20),
+          ],
+        ),
+        build: (context) => [
+          pw.Table.fromTextArray(
+            headers: ['No.', 'Item', 'Qty', 'Rate', 'Amount'],
+            data: products.asMap().entries.map((entry) {
+              final index = entry.key;
+              final p = entry.value;
+              final rate = (p['rate'] ?? 0).toDouble();
+              final qty = (p['qty'] ?? 0).toDouble();
+              final amount = rate * qty;
+              return [
+                (index + 1).toString(),
+                p['name'],
+                qty.toInt().toString(),
+                rate.toStringAsFixed(2),
+                amount.toStringAsFixed(2),
+              ];
+            }).toList(),
+            headerStyle: pw.TextStyle(font: boldFont, color: PdfColors.white),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.teal700),
+            cellStyle: pw.TextStyle(font: font),
+            cellAlignments: {
+              0: pw.Alignment.center,
+              2: pw.Alignment.center,
+              3: pw.Alignment.centerRight,
+              4: pw.Alignment.centerRight,
+            },
+            columnWidths: {
+              0: const pw.FlexColumnWidth(0.5),
+              1: const pw.FlexColumnWidth(3),
+              2: const pw.FlexColumnWidth(1),
+              3: const pw.FlexColumnWidth(1.5),
+              4: const pw.FlexColumnWidth(1.5),
+            },
+          ),
+        ],
+        footer: (context) => pw.Column(
+          children: [
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Container(
+                width: 260,
+                child: pw.Column(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    _summaryRow(
+                      'Subtotal',
+                      totals['subtotal']!,
+                      font,
+                      boldFont,
                     ),
-                    child: pw.Column(
-                      children: [
-                        _summaryRow("Subtotal", subtotal, font, boldFont),
-                        _summaryRow(
-                          "Additional Charge",
-                          additionalCharge,
-                          font,
-                          boldFont,
-                        ),
-                        _summaryRow("Discount", -discount, font, boldFont),
-                        _summaryRow(
-                          "Tax ($taxPercent%)",
-                          taxAmount,
-                          font,
-                          boldFont,
-                        ),
-                        _summaryRow(
-                          "Previous Balance",
-                          previousBalance,
-                          font,
-                          boldFont,
-                        ),
-                        pw.Divider(thickness: 1, color: PdfColors.grey600),
-                        _summaryRow(
-                          "Total Amount Due",
-                          grandTotal,
-                          font,
-                          boldFont,
-                          isBold: true,
-                          size: 16,
-                        ),
-                        _summaryRow("Paid Now", paidNow, font, boldFont),
-                        pw.Divider(thickness: 2),
-                        _summaryRow(
-                          "Balance Due",
-                          balanceDue,
-                          font,
-                          boldFont,
-                          isBold: true,
-                          size: 18,
-                          color: balanceDue > 0
-                              ? PdfColors.red700
-                              : PdfColors.green700,
-                        ),
-                      ],
+                    if ((widget.data['additionalCharge'] ?? 0) > 0)
+                      _summaryRow(
+                        'Additional Charge',
+                        (widget.data['additionalCharge'] ?? 0).toDouble(),
+                        font,
+                        boldFont,
+                      ),
+                    if ((widget.data['discount'] ?? 0) > 0)
+                      _summaryRow(
+                        'Discount',
+                        (widget.data['discount'] ?? 0).toDouble(),
+                        font,
+                        boldFont,
+                        color: PdfColors.red,
+                      ),
+                    _summaryRow(
+                      'Tax (${widget.data['tax'] ?? 0}%)',
+                      totals['taxAmount']!,
+                      font,
+                      boldFont,
                     ),
-                  ),
-                ),
-              ],
-            ),
-
-            pw.SizedBox(height: 40),
-
-            // Footer
-            pw.Center(
-              child: pw.Text(
-                "Thank you for your business!",
-                style: pw.TextStyle(
-                  font: boldFont,
-                  fontSize: 16,
-                  color: PdfColors.grey700,
+                    if ((widget.data['previousBalance'] ?? 0) > 0)
+                      _summaryRow(
+                        'Previous Balance',
+                        (widget.data['previousBalance'] ?? 0).toDouble(),
+                        font,
+                        boldFont,
+                      ),
+                    pw.Divider(),
+                    _summaryRow(
+                      'Total',
+                      totals['grandTotal']!,
+                      font,
+                      boldFont,
+                      bold: true,
+                    ),
+                    _summaryRow(
+                      'Paid Now',
+                      (widget.data['paidNow'] ?? 0).toDouble(),
+                      font,
+                      boldFont,
+                    ),
+                    pw.Divider(),
+                    _summaryRow(
+                      'Balance',
+                      totals['balance']!,
+                      font,
+                      boldFont,
+                      bold: true,
+                      color: totals['balance']! > 0
+                          ? PdfColors.red
+                          : PdfColors.green,
+                    ),
+                  ],
                 ),
               ),
             ),
-            pw.SizedBox(height: 10),
-            // pw.Center(
-            //   child: pw.Text(
-            //     "For any queries, contact us at support@yourbusiness.com",
-            //     style: pw.TextStyle(
-            //       font: font,
-            //       fontSize: 10,
-            //       color: PdfColors.grey600,
-            //     ),
-            //   ),
-            // ),
+            pw.SizedBox(height: 30),
+            pw.Text(
+              'Thank you for your business!',
+              style: pw.TextStyle(
+                font: font,
+                fontSize: 12,
+                fontStyle: pw.FontStyle.italic,
+              ),
+            ),
           ],
         ),
       ),
@@ -314,53 +323,181 @@ class InvoicePage extends StatelessWidget {
     return pdf.save();
   }
 
-  // Helper: Table Header
-  pw.Widget _tableHeader(
-    String text, {
-    pw.TextAlign align = pw.TextAlign.left,
-  }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(
-          color: PdfColors.white,
-          fontSize: 12,
-          fontWeight: pw.FontWeight.bold,
-        ),
-        textAlign: align,
+  void _zoomIn() {
+    setState(() {
+      _scale = (_scale + 0.25).clamp(0.5, 3.0);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _scale = (_scale - 0.25).clamp(0.5, 3.0);
+    });
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _scale = 1.0;
+    });
+  }
+
+  Future<void> shareInvoice() async {
+    if (_pdfBytes == null) return;
+
+    try {
+      final fileName = _invoiceFileName();
+
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/$fileName';
+      final file = File(filePath);
+
+      await file.writeAsBytes(_pdfBytes!, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: 'Invoice - $fileName',
+        subject: 'Invoice $fileName',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error sharing invoice: $e')));
+      }
+    }
+  }
+
+  String _safeFileName(String name) {
+    return name.trim().replaceAll(RegExp(r'[^\w\s-]'), '').replaceAll(' ', '_');
+  }
+
+  String _invoiceFileName() {
+    final customerName = _safeFileName(
+      widget.data['name'] ?? widget.data['entityName'] ?? 'Customer',
+    );
+
+    final date = DateFormat('dd-MM-yyyy').format(DateTime.now());
+
+    return '${customerName}_$date.pdf';
+  }
+
+  // ===================== UI =====================
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Invoice Preview'),
+        backgroundColor: Colors.teal,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Regenerate',
+            onPressed: _generatePdf,
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // PDF Preview
+          if (_isLoading)
+            const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Generating invoice...'),
+                ],
+              ),
+            )
+          else if (_pdfBytes != null)
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 3.0,
+              child: PdfPreview(
+                build: (format) => _pdfBytes!,
+                allowPrinting: true,
+                allowSharing: false,
+                canChangePageFormat: false,
+                canChangeOrientation: false,
+                canDebug: false,
+                pdfFileName:
+                    'invoice_${widget.data['name'] ?? widget.data['entityName'] ?? ''}.pdf',
+              ),
+            )
+          else
+            const Center(child: Text('Failed to generate PDF')),
+
+          // Zoom Controls (Bottom Left)
+          if (!_isLoading && _pdfBytes != null)
+            // Positioned(
+            //   bottom: 16,
+            //   left: 16,
+            //   child: Card(
+            //     elevation: 4,
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(12),
+            //     ),
+            //     child: Padding(
+            //       padding: const EdgeInsets.all(4),
+            //       child: Row(
+            //         mainAxisSize: MainAxisSize.min,
+            //         children: [
+            //           IconButton(
+            //             icon: const Icon(Icons.zoom_out),
+            //             onPressed: _zoomOut,
+            //             tooltip: 'Zoom Out',
+            //           ),
+            //           Text(
+            //             '${(_scale * 100).toInt()}%',
+            //             style: const TextStyle(fontWeight: FontWeight.bold),
+            //           ),
+            //           IconButton(
+            //             icon: const Icon(Icons.zoom_in),
+            //             onPressed: _zoomIn,
+            //             tooltip: 'Zoom In',
+            //           ),
+            //           const VerticalDivider(),
+            //           IconButton(
+            //             icon: const Icon(Icons.refresh),
+            //             onPressed: _resetZoom,
+            //             tooltip: 'Reset Zoom',
+            //           ),
+            //         ],
+            //       ),
+            //     ),
+            //   ),
+            // ),
+            // Share Button (Bottom Right)
+            if (!_isLoading && _pdfBytes != null)
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: Container(
+                  width: 300,
+                  child: FloatingActionButton.extended(
+                    onPressed: shareInvoice,
+                    backgroundColor: Colors.teal,
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share'),
+                  ),
+                ),
+              ),
+        ],
       ),
     );
   }
 
-  // Helper: Table Cell
-  pw.Widget _tableCell(
-    String text, {
-    pw.TextAlign align = pw.TextAlign.left,
-    double padding = 10,
-    bool isBold = false,
-  }) {
-    return pw.Padding(
-      padding: pw.EdgeInsets.all(padding),
-      child: pw.Text(
-        text,
-        textAlign: align,
-        style: pw.TextStyle(
-          fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
-          fontSize: 11,
-        ),
-      ),
-    );
-  }
+  // ===================== HELPERS =====================
 
-  // Helper: Summary Row
   pw.Widget _summaryRow(
     String label,
-    double amount,
+    double value,
     pw.Font font,
     pw.Font boldFont, {
-    bool isBold = false,
-    double size = 13,
+    bool bold = false,
     PdfColor? color,
   }) {
     return pw.Padding(
@@ -370,265 +507,14 @@ class InvoicePage extends StatelessWidget {
         children: [
           pw.Text(
             label,
-            style: pw.TextStyle(font: isBold ? boldFont : font, fontSize: size),
+            style: pw.TextStyle(font: bold ? boldFont : font, fontSize: 12),
           ),
           pw.Text(
-            "SAR ${amount >= 0 ? amount.toStringAsFixed(2) : '(${(-amount).toStringAsFixed(2)})'}",
+            'SAR ${value.toStringAsFixed(2)}',
             style: pw.TextStyle(
               font: boldFont,
-              fontSize: size,
-              fontWeight: pw.FontWeight.bold,
+              fontSize: 12,
               color: color ?? PdfColors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Share PDF
-  // Future<void> _sharePdf() async {
-  //   try {
-  //     final bytes = await _generateModernInvoicePdf();
-  //     final dir = await getTemporaryDirectory();
-  //     final file = File("${dir.path}/invoice_$docId.pdf");
-  //     await file.writeAsBytes(bytes);
-
-  //     await Share.shareXFiles(
-  //       [XFile(file.path)],
-  //       text: "Invoice #$docId - ${data['name'] ?? 'Customer'}",
-  //       subject: "Your Invoice from Your Business",
-  //     );
-  //   } catch (e) {
-  //     print("Error sharing PDF: $e");
-  //   }
-  // }
-
-  // // Print PDF
-  // Future<void> _printPdf() async {
-  //   final bytes = await _generateModernInvoicePdf();
-  //   await Printing.layoutPdf(onLayout: (_) => bytes);
-  // }
-
-  // // Save & Open PDF
-  // Future<void> _saveAndOpenPdf() async {
-  //   final bytes = await _generateModernInvoicePdf();
-  //   final dir = await getApplicationDocumentsDirectory();
-  //   final file = File("${dir.path}/Invoice_$docId.pdf");
-  //   await file.writeAsBytes(bytes);
-  //   OpenFile.open(file.path);
-  // }
-
-  @override
-  Widget build(BuildContext context) {
-    final balance =
-        (data['currentBill'] ?? data['amount'] ?? 0.0) -
-        (data['paidNow'] ?? 0.0);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Invoice',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Theme.of(context).primaryColor,
-        elevation: 0,
-        // actions: [
-        //   IconButton(
-        //     icon: const Icon(Icons.picture_as_pdf, color: Colors.black87),
-        //     onPressed: () async {
-        //       final pdfBytes = await _generatePDFBytes();
-        //       await Printing.layoutPdf(onLayout: (format) => pdfBytes);
-        //     },
-        //   ),
-        //   IconButton(
-        //     icon: const Icon(Icons.share, color: Colors.black87),
-        //     onPressed: () async {
-        //       final pdfBytes = await _generatePDFBytes();
-        //       final xFile = XFile.fromData(
-        //         pdfBytes,
-        //         name: 'invoice_${docId}.pdf',
-        //         mimeType: 'application/pdf',
-        //       );
-        //       await Share.shareXFiles([xFile], text: _generateInvoiceText());
-        //     },
-        //   ),
-        // ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          //   gradient: LinearGradient(
-          //     colors: [
-          //       Theme.of(context).primaryColor,
-          //       Theme.of(context).primaryColorLight,
-          //     ],
-          //     begin: Alignment.topLeft,
-          //     end: Alignment.bottomRight,
-          //   ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                color: Colors.teal.withOpacity(0.1),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  side: BorderSide(color: Colors.black87.withOpacity(0.2)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'INVOICE',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Divider(height: 32, color: Colors.black87),
-                      Text(
-                        'Name: ${data['name'] ?? data['entityName']}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Phone: ${data['phone'] ?? 'N/A'}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Date: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const Divider(height: 32, color: Colors.black87),
-                      const Text(
-                        'Products:',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ...((data['products'] as List? ?? []).map(
-                        (p) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${p['name']} x ${p['qty']}',
-                                style: const TextStyle(color: Colors.black87),
-                              ),
-                              Text(
-                                '﷼${((p['rate'] ?? 0.0) * (p['qty'] as num? ?? 0)).toStringAsFixed(2)}',
-                                style: const TextStyle(color: Colors.black87),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )),
-                      const Divider(height: 32, color: Colors.black87),
-                      _buildRow(
-                        'Previous Balance',
-                        data['previousBalance'] ?? 0.0,
-                      ),
-                      _buildRow(
-                        'Additional Charge',
-                        data['additionalCharge'] ?? 0.0,
-                      ),
-                      _buildRow('Discount', data['discount'] ?? 0.0),
-                      _buildRow('Tax', data['tax'] ?? 0.0),
-                      const Divider(height: 24, color: Colors.black87),
-                      _buildRow(
-                        'Total Bill',
-                        data['currentBill'] ?? data['amount'] ?? 0.0,
-                        isTotal: true,
-                      ),
-                      _buildRow('Paid Now', data['paidNow'] ?? 0.0),
-                      const Divider(height: 24, color: Colors.black87),
-                      _buildRow('Balance', balance, isBalance: true),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final pdfBytes = await _generateModernInvoicePdf();
-                    final xFile = XFile.fromData(
-                      pdfBytes,
-                      name: 'invoice_${data['name'] ?? data['entityName']}.pdf',
-                      mimeType: 'application/pdf',
-                    );
-                    await Share.shareXFiles([
-                      xFile,
-                    ], text: _generateInvoiceText());
-                  },
-                  icon: const Icon(Icons.share),
-                  label: const Text('Share Invoice PDF'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRow(
-    String label,
-    num value, {
-    bool isTotal = false,
-    bool isBalance = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isTotal || isBalance ? 18 : 16,
-              fontWeight: isTotal || isBalance
-                  ? FontWeight.bold
-                  : FontWeight.normal,
-              color: Colors.black87,
-            ),
-          ),
-          Text(
-            '﷼${value.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: isTotal || isBalance ? 18 : 16,
-              fontWeight: isTotal || isBalance
-                  ? FontWeight.bold
-                  : FontWeight.normal,
-              color: Colors.black87,
             ),
           ),
         ],

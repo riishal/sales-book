@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:salesbook/l10n/app_localizations.dart';
+import 'package:salesbook/provider/connectivity_provider.dart';
 import 'package:salesbook/provider/language_provider.dart';
 import 'screens/home_page.dart';
 import 'firebase_options.dart';
@@ -14,8 +15,11 @@ void main() async {
   // See the official documentation for more information: https://firebase.flutter.dev/docs/cli
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => LanguageProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => LanguageProvider()),
+        ChangeNotifierProvider(create: (context) => ConnectivityProvider()),
+      ],
       child: const SalesApp(),
     ),
   );
@@ -58,9 +62,7 @@ class SalesApp extends StatelessWidget {
           // RTL support when Malayalam is active
           builder: (context, child) {
             return Directionality(
-              textDirection: langProvider.isMalayalam
-                  ? TextDirection.ltr
-                  : TextDirection.ltr,
+              textDirection: TextDirection.ltr,
               child: child!,
             );
           },

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:salesbook/provider/connectivity_provider.dart';
 import 'package:salesbook/provider/language_provider.dart';
 import '../l10n/app_localizations.dart';
 
@@ -48,6 +49,43 @@ class _HomePageState extends State<HomePage> {
         return query.where('timestamp', isNull: true);
       default:
         return query;
+    }
+  }
+
+  bool _isNetworkAlertShowing = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final connectivityProvider = Provider.of<ConnectivityProvider>(context);
+    connectivityProvider.addListener(_handleConnectivityChange);
+    _handleConnectivityChange(); // Initial check
+  }
+
+  void _handleConnectivityChange() {
+    final connectivityProvider =
+        Provider.of<ConnectivityProvider>(context, listen: false);
+    if (!connectivityProvider.hasInternet && !_isNetworkAlertShowing) {
+      _isNetworkAlertShowing = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('No Internet Connection'),
+          content: const Text('Please check your network settings.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // The dialog will be dismissed automatically when the connection is back.
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else if (connectivityProvider.hasInternet && _isNetworkAlertShowing) {
+      Navigator.of(context, rootNavigator: true).pop();
+      _isNetworkAlertShowing = false;
     }
   }
 

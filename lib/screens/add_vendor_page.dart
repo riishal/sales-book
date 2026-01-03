@@ -98,13 +98,14 @@ class _AddVendorPageState extends State<AddVendorPage> {
     Map<String, dynamic> vendorData = {
       'name': _nameController.text,
       'phone': _phoneController.text,
-      'previousBalance': double.parse(_previousBalanceController.text),
+      'previousBalance':
+          double.tryParse(_previousBalanceController.text) ?? 0.0,
       'currentBill': _grandTotal,
-      'additionalCharge': double.parse(_additionalChargeController.text),
-      'discount': double.parse(_discountController.text),
-      'tax': double.parse(_taxController.text),
+      'additionalCharge':
+          double.tryParse(_additionalChargeController.text) ?? 0.0,
+      'discount': double.tryParse(_discountController.text) ?? 0.0,
+      'tax': double.tryParse(_taxController.text) ?? 0.0,
       'products': _selectedProducts,
-      'timestamp': FieldValue.serverTimestamp(),
     };
 
     // Data for invoice needs a concrete paidNow value.
@@ -134,6 +135,7 @@ class _AddVendorPageState extends State<AddVendorPage> {
         // New vendor
         vendorRef = FirebaseFirestore.instance.collection('vendors').doc();
         vendorData['paidNow'] = paidNow;
+        vendorData['timestamp'] = FieldValue.serverTimestamp();
         batch.set(vendorRef, vendorData);
       }
 
@@ -150,41 +152,40 @@ class _AddVendorPageState extends State<AddVendorPage> {
           'amount': _transactionTotal,
           'paidNow': paidNow,
           'products': _selectedProducts,
-          'additionalCharge': double.parse(_additionalChargeController.text),
-          'discount': double.parse(_discountController.text),
-          'tax': double.parse(_taxController.text),
-          'previousBalance': double.parse(_previousBalanceController.text),
+          'additionalCharge':
+              double.tryParse(_additionalChargeController.text) ?? 0.0,
+          'discount': double.tryParse(_discountController.text) ?? 0.0,
+          'tax': double.tryParse(_taxController.text) ?? 0.0,
+          'previousBalance':
+              double.tryParse(_previousBalanceController.text) ?? 0.0,
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        // Get all product names to fetch them in a single query
-        final productNames = _selectedProducts.map((p) => p['name']).toList();
-        if (productNames.isNotEmpty) {
+        // Chunk product IDs into lists of 30
+        final productIds = _selectedProducts.map((p) => p['id']).toList();
+        for (var i = 0; i < productIds.length; i += 30) {
+          final chunk = productIds.sublist(
+              i, i + 30 > productIds.length ? productIds.length : i + 30);
           final productQuery = await FirebaseFirestore.instance
               .collection('products')
-              .where('name', whereIn: productNames)
+              .where(FieldPath.documentId, whereIn: chunk)
               .get();
 
-          // Create a map for quick lookups
-          final productDocs = {
-            for (var doc in productQuery.docs)
-              doc.data()['name']: doc.reference,
-          };
-
-          for (var product in _selectedProducts) {
-            if (productDocs.containsKey(product['name'])) {
-              final productDocRef = productDocs[product['name']]!;
-              batch.update(productDocRef, {
-                'qty': FieldValue.increment((product['qty'] as num).toInt()),
-                'price': product['rate'],
-              });
-            }
+          for (var doc in productQuery.docs) {
+            final product = _selectedProducts.firstWhere(
+              (p) => p['id'] == doc.id,
+            );
+            batch.update(doc.reference, {
+              'qty': FieldValue.increment((product['qty'] as num).toInt()),
+              'price': product['rate'],
+            });
           }
         }
       }
 
       await batch.commit();
 
+      if (!mounted) return;
       Navigator.pop(context);
       Navigator.push(
         context,
@@ -197,10 +198,12 @@ class _AddVendorPageState extends State<AddVendorPage> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
