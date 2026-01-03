@@ -109,6 +109,30 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                   );
                 }).toList();
 
+                // Sort alphabetically so similar items appear together
+                // Sort: Available first, Out of Stock last, then Alphabetical
+                products.sort((a, b) {
+                  final dataA = a.data();
+                  final dataB = b.data();
+
+                  final stockA = (dataA['qty'] ?? 0);
+                  final stockB = (dataB['qty'] ?? 0);
+
+                  // If not purchase → available first
+                  if (!widget.isPurchase) {
+                    // A available, B out of stock → A first
+                    if (stockA > 0 && stockB <= 0) return -1;
+
+                    // A out of stock, B available → B first
+                    if (stockA <= 0 && stockB > 0) return 1;
+                  }
+
+                  // Otherwise fallback to alphabetical sort
+                  final nameA = dataA['name'].toString().toLowerCase();
+                  final nameB = dataB['name'].toString().toLowerCase();
+                  return nameA.compareTo(nameB);
+                });
+
                 return GridView.builder(
                   key: const PageStorageKey('product-grid'),
                   padding: const EdgeInsets.all(16.0),
@@ -194,7 +218,7 @@ class _ProductSelectionPageState extends State<ProductSelectionPage> {
                                         'SRP: ﷼${price.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Colors.grey[700],
+                                          color: Colors.teal[700],
                                         ),
                                       ),
                                       if (!widget.isPurchase)
