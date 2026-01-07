@@ -54,40 +54,40 @@ class _HomePageState extends State<HomePage> {
 
   bool _isNetworkAlertShowing = false;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final connectivityProvider = Provider.of<ConnectivityProvider>(context);
-    connectivityProvider.addListener(_handleConnectivityChange);
-    _handleConnectivityChange(); // Initial check
-  }
+  // @override
+  // void didChangeDependencies() {
+  //   super.didChangeDependencies();
+  //   final connectivityProvider = Provider.of<ConnectivityProvider>(context);
+  //   connectivityProvider.addListener(_handleConnectivityChange);
+  //   _handleConnectivityChange(); // Initial check
+  // }
 
-  void _handleConnectivityChange() {
-    final connectivityProvider =
-        Provider.of<ConnectivityProvider>(context, listen: false);
-    if (!connectivityProvider.hasInternet && !_isNetworkAlertShowing) {
-      _isNetworkAlertShowing = true;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('No Internet Connection'),
-          content: const Text('Please check your network settings.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                // The dialog will be dismissed automatically when the connection is back.
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    } else if (connectivityProvider.hasInternet && _isNetworkAlertShowing) {
-      Navigator.of(context, rootNavigator: true).pop();
-      _isNetworkAlertShowing = false;
-    }
-  }
+  // void _handleConnectivityChange() {
+  //   final connectivityProvider =
+  //       Provider.of<ConnectivityProvider>(context, listen: false);
+  //   if (!connectivityProvider.hasInternet && !_isNetworkAlertShowing) {
+  //     _isNetworkAlertShowing = true;
+  //     showDialog(
+  //       context: context,
+  //       barrierDismissible: false,
+  //       builder: (context) => AlertDialog(
+  //         title: const Text('No Internet Connection'),
+  //         content: const Text('Please check your network settings.'),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () {
+  //               // The dialog will be dismissed automatically when the connection is back.
+  //             },
+  //             child: const Text('OK'),
+  //           ),
+  //         ],
+  //       ),
+  //     );
+  //   } else if (connectivityProvider.hasInternet && _isNetworkAlertShowing) {
+  //     Navigator.of(context, rootNavigator: true).pop();
+  //     _isNetworkAlertShowing = false;
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {

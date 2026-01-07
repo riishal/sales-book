@@ -1,10 +1,9 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:salesbook/l10n/app_localizations.dart';
-import 'package:salesbook/provider/connectivity_provider.dart';
+
 import 'package:salesbook/provider/language_provider.dart';
 import 'screens/home_page.dart';
 import 'firebase_options.dart';
@@ -18,7 +17,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => LanguageProvider()),
-        ChangeNotifierProvider(create: (context) => ConnectivityProvider()),
+        // ChangeNotifierProvider(create: (context) => ConnectivityProvider()),
       ],
       child: const SalesApp(),
     ),

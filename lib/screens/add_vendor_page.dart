@@ -165,7 +165,9 @@ class _AddVendorPageState extends State<AddVendorPage> {
         final productIds = _selectedProducts.map((p) => p['id']).toList();
         for (var i = 0; i < productIds.length; i += 30) {
           final chunk = productIds.sublist(
-              i, i + 30 > productIds.length ? productIds.length : i + 30);
+            i,
+            i + 30 > productIds.length ? productIds.length : i + 30,
+          );
           final productQuery = await FirebaseFirestore.instance
               .collection('products')
               .where(FieldPath.documentId, whereIn: chunk)
@@ -327,6 +329,15 @@ class _AddVendorPageState extends State<AddVendorPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'Total Products: ${_selectedProducts.length}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                      SizedBox(height: 8),
                       Text(
                         'Bill Amount: ﷼${_transactionTotal.toStringAsFixed(2)}',
                         style: TextStyle(
