@@ -159,8 +159,11 @@ class CustomerDetailsPage extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  TransactionsPage(entityId: docId, entityType: 'Customer'),
+              builder: (_) => TransactionsPage(
+                entityId: docId,
+                entityType: 'Customer',
+                currentBalance: balance,
+              ),
             ),
           );
         }),
@@ -170,6 +173,7 @@ class CustomerDetailsPage extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (_) => PaymentPage(
+                entityName: customerData['name'] ?? 'N/A',
                 docId: docId,
                 type: 'customers',
                 currentBalance: balance,

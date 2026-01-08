@@ -1,16 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:salesbook/screens/payment_invoice.dart';
 
 class PaymentPage extends StatefulWidget {
   final String docId;
   final String type; // 'customers' or 'vendors'
   final double currentBalance;
+  final String entityName;
 
   const PaymentPage({
     super.key,
     required this.docId,
     required this.type,
     required this.currentBalance,
+    required this.entityName,
   });
 
   @override
@@ -24,24 +28,19 @@ class _PaymentPageState extends State<PaymentPage> {
   final _amountController = TextEditingController();
   TransactionType _transactionType = TransactionType.getCash;
   bool _isLoading = false;
+  late double newBalance;
 
   Future<void> _saveTransaction() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid amount')),
       );
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       return;
     }
 
@@ -51,80 +50,88 @@ class _PaymentPageState extends State<PaymentPage> {
           .collection(widget.type)
           .doc(widget.docId);
 
-      // Determine the transaction details based on the type
-      String transactionDetail;
-      Object newPaidNowValue;
-
       final currentDoc = await docRef.get();
+      final entityName = currentDoc.data()?['name'] ?? widget.entityName;
+
+      // Start with current balance passed from parent
+      double oldBalance = widget.currentBalance;
+      newBalance = oldBalance;
+
+      String transactionDetail;
+      FieldValue paidNowIncrement;
 
       if (widget.type == 'customers') {
         if (_transactionType == TransactionType.getCash) {
+          // Customer pays you → reduce "You will get"
           transactionDetail = 'Cash Received from Customer';
-          newPaidNowValue = FieldValue.increment(amount);
+          paidNowIncrement = FieldValue.increment(amount);
+          newBalance = oldBalance - amount;
         } else {
-          // Pay Cash
+          // You pay customer (refund) → increase "You will get"
           transactionDetail = 'Cash Paid to Customer';
-          newPaidNowValue = FieldValue.increment(-amount);
+          paidNowIncrement = FieldValue.increment(-amount);
+          newBalance = oldBalance + amount;
         }
       } else {
         // vendors
         if (_transactionType == TransactionType.payCash) {
+          // You pay vendor → reduce "You will pay"
           transactionDetail = 'Cash Paid to Vendor';
-          newPaidNowValue = FieldValue.increment(amount);
+          paidNowIncrement = FieldValue.increment(amount);
+          newBalance = oldBalance - amount;
         } else {
-          // Get Cash
+          // Vendor pays you back → increase "You will pay" (or reduce your credit)
           transactionDetail = 'Cash Received from Vendor';
-          newPaidNowValue = FieldValue.increment(-amount);
+          paidNowIncrement = FieldValue.increment(-amount);
+          newBalance = oldBalance + amount;
         }
       }
 
-      // Create a transaction record
       final transactionRef = FirebaseFirestore.instance
           .collection('transactions')
           .doc();
-      batch.set(transactionRef, {
+
+      final transactionData = {
         'entityId': widget.docId,
         'entityType': widget.type == 'customers' ? 'Customer' : 'Vendor',
-        'entityName': currentDoc.data()?['name'] ?? 'N/A',
+        'entityName': entityName,
         'type': transactionDetail,
         'amount': amount,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': Timestamp.now(),
+        'newBalance': newBalance,
         'details': {},
-      });
+      };
 
-      // Update the customer's or vendor's paidNow field
-      batch.update(docRef, {'paidNow': newPaidNowValue});
+      batch.set(transactionRef, transactionData);
+      batch.update(docRef, {'paidNow': paidNowIncrement});
 
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction saved successfully!'),
-            backgroundColor: Colors.green,
+        setState(() => _isLoading = false);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentInvoicePage(
+              transaction: transactionData,
+              balance: newBalance,
+            ),
           ),
         );
-        Navigator.pop(context);
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error saving transaction: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isLoading = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Determine the balance text based on type and balance value
     final balance = widget.currentBalance;
     String balanceText;
     Color balanceColor;
@@ -141,7 +148,6 @@ class _PaymentPageState extends State<PaymentPage> {
         balanceColor = Colors.grey;
       }
     } else {
-      // vendors
       if (balance > 0) {
         balanceText = 'You will pay: ﷼${balance.toStringAsFixed(2)}';
         balanceColor = Colors.red;
@@ -199,21 +205,15 @@ class _PaymentPageState extends State<PaymentPage> {
                     title: const Text('Get Cash'),
                     value: TransactionType.getCash,
                     groupValue: _transactionType,
-                    onChanged: (TransactionType? value) {
-                      setState(() {
-                        _transactionType = value!;
-                      });
-                    },
+                    onChanged: (value) =>
+                        setState(() => _transactionType = value!),
                   ),
                   RadioListTile<TransactionType>(
                     title: const Text('Pay Cash'),
                     value: TransactionType.payCash,
                     groupValue: _transactionType,
-                    onChanged: (TransactionType? value) {
-                      setState(() {
-                        _transactionType = value!;
-                      });
-                    },
+                    onChanged: (value) =>
+                        setState(() => _transactionType = value!),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -222,13 +222,14 @@ class _PaymentPageState extends State<PaymentPage> {
                       labelText: 'Amount',
                       prefixIcon: Icon(Icons.attach_money),
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter an amount';
-                      }
-                      if (double.tryParse(value) == null) {
-                        return 'Please enter a valid number';
+                      if (value == null || value.isEmpty) return 'Enter amount';
+                      if (double.tryParse(value) == null ||
+                          double.parse(value) <= 0) {
+                        return 'Enter valid positive amount';
                       }
                       return null;
                     },
@@ -253,5 +254,11 @@ class _PaymentPageState extends State<PaymentPage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
   }
 }

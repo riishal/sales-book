@@ -3,16 +3,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:salesbook/provider/language_provider.dart';
+import 'package:salesbook/screens/payment_invoice.dart';
 import 'invoice_page.dart';
 
 class TransactionsPage extends StatefulWidget {
   final String entityId;
   final String entityType;
+  final double currentBalance;
 
   const TransactionsPage({
     super.key,
     required this.entityId,
     required this.entityType,
+    required this.currentBalance,
   });
 
   @override
@@ -263,7 +266,25 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                 ),
                               ),
                               onTap: () {
-                                if (transaction['type'] != 'Payment') {
+                                final type = transaction['type']
+                                    .toString()
+                                    .toLowerCase();
+
+                                // Payment / Cash Transactions
+                                if (type.contains('cash') ||
+                                    type.contains('payment')) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PaymentInvoicePage(
+                                        balance: widget.currentBalance,
+                                        transaction: transaction,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                // Sale / Purchase Invoices
+                                else {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -276,6 +297,20 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                     ),
                                   );
                                 }
+
+                                // if (transaction['type'] != 'Payment') {
+                                //   Navigator.push(
+                                //     context,
+                                //     MaterialPageRoute(
+                                //       builder: (_) => InvoicePage(
+                                //         docId: docId,
+                                //         data: transaction,
+                                //         type: transaction['entityType']
+                                //             .toLowerCase(),
+                                //       ),
+                                //     ),
+                                //   );
+                                // }
                               },
                             ),
                           );
